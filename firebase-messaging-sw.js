@@ -1,6 +1,13 @@
 self.skipWaiting();
 self.addEventListener('activate', event => event.waitUntil(self.clients.claim()));
 
+/* Always fetch the HTML page fresh — bypasses iOS PWA cache on every load */
+self.addEventListener('fetch', event => {
+  if (event.request.mode === 'navigate') {
+    event.respondWith(fetch(event.request, { cache: 'no-store' }));
+  }
+});
+
 self.addEventListener('push', event => {
   let payload={};
   try{payload=event.data?.json()||{};}catch(_){payload={body:event.data?.text()};}
