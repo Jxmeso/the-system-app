@@ -12,7 +12,8 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Playfair+Display:wght@700&display=swap');
         
-        body { font-family: 'Inter', system_ui, sans-serif; }
+        body { font-family: 'Inter', system_ui, sans-serif; overscroll-behavior-y: none; }
+        .app-header { position: fixed; top: 0; left: 0; right: 0; transform: translateZ(0); }
         .heading-serif { font-family: 'Playfair Display', Georgia, serif; font-weight: 700; letter-spacing: -0.02em; }
 
         .elegant-dark { background-color: #0f0f0f; color: #f1e9d9; }
@@ -94,7 +95,7 @@
     <!-- MAIN APP -->
     <div id="main-app" class="hidden">
         <!-- HEADER -->
-        <div class="sticky top-0 z-40 glass border-b border-white/10">
+        <div class="app-header z-40 glass border-b border-white/10">
             <div class="max-w-3xl mx-auto px-5 py-4 flex items-center justify-between">
                 <div class="flex items-center gap-x-3">
                     <div onclick="showProfileModal()" class="cursor-pointer">
@@ -106,18 +107,12 @@
                     </div>
                 </div>
                 <div class="flex items-center gap-x-2">
-                    <button onclick="showInstallPrompt()" class="px-3 py-1.5 text-xs bg-white/10 hover:bg-white/20 rounded-2xl flex items-center gap-x-1.5">
-                        <i class="fa-solid fa-download text-xs"></i> 
-                        <span class="hidden md:inline text-xs">Install App</span>
-                    </button>
-                    <button onclick="checkForUpdates()" class="px-3 py-1.5 text-xs bg-white/10 hover:bg-white/20 rounded-2xl">Update</button>
-                    <button onclick="switchRole()" class="px-3 py-1.5 text-xs bg-white/10 hover:bg-white/20 rounded-2xl">Switch</button>
                     <button onclick="showSettings()" class="w-9 h-9 flex items-center justify-center text-[#d4af37]"><i class="fa-solid fa-cog"></i></button>
                 </div>
             </div>
         </div>
 
-        <div class="max-w-3xl mx-auto px-5 pt-6 pb-28">
+        <div class="max-w-3xl mx-auto px-5 pt-28 pb-28">
             
             <!-- DASHBOARD -->
             <div id="tab-dashboard" class="tab-content">
@@ -129,7 +124,7 @@
                     <div class="text-right">
                         <div class="flex items-center justify-end gap-x-1 text-[#d4af37]">
                             <i class="fa-solid fa-star"></i>
-                            <span id="dash-star-count" class="text-3xl font-semibold tabular-nums">142</span>
+                            <span id="dash-star-count" class="text-3xl font-semibold tabular-nums">0</span>
                         </div>
                         <div class="text-[10px] text-[#d4af37]/60 -mt-1">STARS EARNED</div>
                     </div>
@@ -155,15 +150,15 @@
                 <div class="grid grid-cols-3 gap-3 mb-8">
                     <div class="glass rounded-3xl p-4">
                         <div class="text-xs text-[#d4af37]/70 tracking-wider">TASKS TODAY</div>
-                        <div class="flex items-baseline gap-x-2 mt-1"><span id="dash-tasks-done" class="text-4xl font-semibold">3</span><span class="text-[#d4af37]/50">/6</span></div>
+                        <div class="flex items-baseline gap-x-2 mt-1"><span id="dash-tasks-done" class="text-4xl font-semibold">0</span><span class="text-[#d4af37]/50">/<span id="dash-tasks-total">0</span></span></div>
                     </div>
                     <div class="glass rounded-3xl p-4">
                         <div class="text-xs text-[#d4af37]/70 tracking-wider">JOURNAL STREAK</div>
-                        <div class="flex items-baseline gap-x-2 mt-1"><span class="text-4xl font-semibold">19</span><span class="text-emerald-400 text-sm">days</span></div>
+                        <div class="flex items-baseline gap-x-2 mt-1"><span id="dash-journal-streak" class="text-4xl font-semibold">0</span><span class="text-emerald-400 text-sm">days</span></div>
                     </div>
                     <div class="glass rounded-3xl p-4">
                         <div class="text-xs text-[#d4af37]/70 tracking-wider">ACTIVE PUNISHMENTS</div>
-                        <div class="mt-1"><span id="dash-active-punish" class="text-4xl font-semibold">1</span></div>
+                        <div class="mt-1"><span id="dash-active-punish" class="text-4xl font-semibold">0</span></div>
                     </div>
                 </div>
 
@@ -312,6 +307,7 @@
 
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-storage-compat.js"></script>
     <script>
         // ==================== CONFIG ====================
         const APP_NAME = "The System";
@@ -326,17 +322,18 @@
         };
         firebase.initializeApp(firebaseConfig);
         const sharedStateDocument = firebase.firestore().collection('systems').doc('shared');
+        const evidenceStorage = firebase.storage();
         let firestoreConnected = false;
         let applyingRemoteState = false;
-        let knownTaskIds = new Set();
+        let knownTaskStatuses = new Map();
         
         let state = {
             dynamicName: APP_NAME,
             domTitle: "Sir",
-            subTitle: "pup",
+            subTitle: "Jacob",
             currentRole: "dom",
             avatar: "https://i.pravatar.cc/120?img=68",
-            stars: 142,
+            stars: 0,
             starLog: [],
             tasks: [],
             punishments: [],
@@ -378,14 +375,24 @@
                 if (!snapshot.exists) {
                     firestoreConnected = true;
                     sharedStateDocument.set(getSharedState()).catch(console.error);
-                    knownTaskIds = new Set(state.tasks.map(task => task.id));
+                    knownTaskStatuses = new Map(state.tasks.map(task => [task.id, task.status]));
                     return;
                 }
 
                 const remoteState = snapshot.data();
+                if ((remoteState.dataVersion || 0) < 2) {
+                    remoteState.dataVersion = 2;
+                    remoteState.subTitle = 'Jacob';
+                    remoteState.stars = 0;
+                    remoteState.starLog = [];
+                    sharedStateDocument.set(remoteState).catch(console.error);
+                }
                 const remoteTasks = remoteState.tasks || [];
                 const newTasks = firestoreConnected
-                    ? remoteTasks.filter(task => !knownTaskIds.has(task.id) && task.status === 'pending')
+                    ? remoteTasks.filter(task => !knownTaskStatuses.has(task.id) && task.status === 'pending')
+                    : [];
+                const completedTasks = firestoreConnected
+                    ? remoteTasks.filter(task => knownTaskStatuses.get(task.id) === 'pending' && task.status === 'completed')
                     : [];
 
                 applyingRemoteState = true;
@@ -394,11 +401,12 @@
                 localStorage.setItem('the_system_v4', JSON.stringify(state));
                 applyingRemoteState = false;
                 firestoreConnected = true;
-                knownTaskIds = new Set(remoteTasks.map(task => task.id));
+                knownTaskStatuses = new Map(remoteTasks.map(task => [task.id, task.status]));
 
                 updateRoleUI();
                 renderCurrentTab();
                 if (newTasks.length && state.currentRole === 'sub') showIncomingTask(newTasks[0]);
+                if (completedTasks.length && state.currentRole === 'dom') showCompletedTask(completedTasks[0]);
             }, error => {
                 console.error('Firebase connection failed:', error);
             });
@@ -417,6 +425,24 @@
                         <div class="text-2xl font-semibold mb-2">${task.title}</div>
                         <div class="text-sm opacity-80 mb-6">${task.desc || ''}</div>
                         <button onclick="this.closest('.fixed').remove(); navigateToTab('tasks')" class="w-full py-3 bg-[#8B0000] text-white rounded-2xl">View Task</button>
+                    </div>
+                </div>`;
+            document.getElementById('modal-container').appendChild(modal);
+        }
+
+        function showCompletedTask(task) {
+            if ('Notification' in window && Notification.permission === 'granted') {
+                try { new Notification('Task completed by Jacob', { body: task.title }); } catch (_) {}
+            }
+            const modal = document.createElement('div');
+            modal.innerHTML = `
+                <div class="fixed inset-0 bg-black/90 z-[200] flex items-center justify-center p-6" onclick="this.remove()">
+                    <div onclick="event.stopImmediatePropagation()" class="glass w-full max-w-md rounded-3xl p-7 text-center">
+                        <i class="fa-solid fa-circle-check text-emerald-400 text-4xl mb-4"></i>
+                        <div class="text-xs text-emerald-400 tracking-widest mb-2">TASK COMPLETED</div>
+                        <div class="text-2xl font-semibold mb-2">${task.title}</div>
+                        <div class="text-sm opacity-80 mb-6">Jacob has submitted this task${(task.evidence || []).length ? ' with evidence' : ''}.</div>
+                        <button onclick="this.closest('.fixed').remove(); navigateToTab('evidence')" class="w-full py-3 bg-emerald-900 text-white rounded-2xl">View Evidence</button>
                     </div>
                 </div>`;
             document.getElementById('modal-container').appendChild(modal);
@@ -473,8 +499,30 @@
         }
 
         // ==================== ACTIVITY LOG ====================
+        function formatUKDate(value) {
+            if (!value) return 'No due date';
+            const date = /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(`${value}T12:00:00`) : new Date(value);
+            return date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        }
+
+        function formatUKTime(value = new Date()) {
+            return new Date(value).toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true });
+        }
+
+        function calculateJournalStreak() {
+            if (!state.journal.length) return 0;
+            const dates = new Set(state.journal.map(entry => entry.date).filter(Boolean));
+            let cursor = new Date();
+            let streak = 0;
+            while (dates.has(cursor.toISOString().split('T')[0])) {
+                streak += 1;
+                cursor.setDate(cursor.getDate() - 1);
+            }
+            return streak;
+        }
+
         function logActivity(type, message) {
-            const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const time = formatUKTime();
             state.activityLog.unshift({ id: Date.now(), type, message, time });
             if (state.activityLog.length > 40) state.activityLog.pop();
             saveState();
@@ -485,6 +533,10 @@
             const isDom = state.currentRole === 'dom';
             document.getElementById('dash-greeting').textContent = isDom ? state.domTitle : state.subTitle;
             document.getElementById('dash-star-count').textContent = state.stars;
+            document.getElementById('dash-tasks-done').textContent = state.tasks.filter(task => task.status === 'completed').length;
+            document.getElementById('dash-tasks-total').textContent = state.tasks.length;
+            document.getElementById('dash-journal-streak').textContent = calculateJournalStreak();
+            document.getElementById('dash-active-punish').textContent = state.punishments.filter(punishment => punishment.status === 'active').length;
 
             checkActivePunishmentBanner();
 
@@ -522,7 +574,7 @@
             pending.forEach(task => {
                 const div = document.createElement('div');
                 div.className = 'glass rounded-2xl px-4 py-3 flex justify-between items-center cursor-pointer dynamic-card';
-                div.innerHTML = `<div><div class="font-medium">${task.title}</div><div class="text-xs text-[#d4af37]/70">${task.due}</div></div>`;
+                div.innerHTML = `<div><div class="font-medium">${task.title}</div><div class="text-xs text-[#d4af37]/70">Due ${formatUKDate(task.due)}</div></div>`;
                 div.onclick = () => showTaskDetail(task);
                 todayContainer.appendChild(div);
             });
@@ -582,7 +634,7 @@
                         </div>
                         <div class="ml-4">
                             ${state.currentRole === 'sub' ? 
-                                `<button onclick="event.stopImmediatePropagation(); completeTask(${task.id}, this)" class="px-5 py-1.5 text-xs bg-emerald-900 hover:bg-emerald-800 text-emerald-300 rounded-2xl">Complete</button>` : 
+                                `<button onclick="event.stopImmediatePropagation(); showTaskDetailById(${task.id})" class="px-5 py-1.5 text-xs bg-emerald-900 hover:bg-emerald-800 text-emerald-300 rounded-2xl">Open</button>` :
                                 `<button onclick="event.stopImmediatePropagation(); deleteTask(${task.id}, this)" class="px-4 py-1 text-xs text-red-400/70">Remove</button>`}
                         </div>
                     </div>
@@ -590,6 +642,92 @@
                 div.onclick = () => showTaskDetail(task);
                 container.appendChild(div);
             });
+        }
+
+        function showTaskDetailById(taskId) {
+            const task = state.tasks.find(item => item.id === taskId);
+            if (task) showTaskDetail(task);
+        }
+
+        function evidenceInput(type) {
+            const config = {
+                photo: { label: 'Photo', accept: 'image/*', capture: 'environment' },
+                video: { label: 'Video', accept: 'video/*', capture: 'environment' },
+                voice: { label: 'Voice note', accept: 'audio/*', capture: '' },
+                file: { label: 'Attachment', accept: '*/*', capture: '' }
+            }[type];
+            if (type === 'text') {
+                return `<label class="block"><span class="text-xs text-[#d4af37]/70">TEXT REPORT</span><textarea id="evidence-text" rows="4" class="beautiful-input w-full px-4 py-3 rounded-2xl mt-1" placeholder="Write your report..."></textarea></label>`;
+            }
+            if (!config) return '';
+            return `<label class="block"><span class="text-xs text-[#d4af37]/70">${config.label.toUpperCase()}</span><input id="evidence-${type}" type="file" accept="${config.accept}" ${config.capture ? `capture="${config.capture}"` : ''} class="beautiful-input w-full px-4 py-3 rounded-2xl mt-1 text-sm"></label>`;
+        }
+
+        function renderSubmittedEvidence(task) {
+            const items = task.evidence || [];
+            if (!items.length) return '<div class="text-sm opacity-60">No evidence submitted.</div>';
+            return items.map(item => item.type === 'text'
+                ? `<div class="glass rounded-2xl p-4"><div class="text-xs text-[#d4af37]/70 mb-1">TEXT REPORT</div><div class="text-sm whitespace-pre-wrap">${item.value}</div></div>`
+                : `<a href="${item.url}" target="_blank" rel="noopener" class="glass rounded-2xl p-4 flex items-center justify-between"><span><i class="fa-solid fa-paperclip mr-2"></i>${item.name}</span><i class="fa-solid fa-arrow-up-right-from-square text-[#d4af37]"></i></a>`
+            ).join('');
+        }
+
+        function showTaskDetail(task) {
+            const isSub = state.currentRole === 'sub';
+            const required = task.requiredEvidence || [];
+            const modal = document.createElement('div');
+            modal.innerHTML = `
+                <div class="fixed inset-0 bg-black/90 z-[100] flex items-end md:items-center justify-center" onclick="this.remove()">
+                    <div onclick="event.stopImmediatePropagation()" class="glass w-full md:w-[560px] max-h-[90vh] overflow-y-auto rounded-t-3xl md:rounded-3xl p-6">
+                        <div class="flex justify-between gap-4 mb-5"><div><div class="font-semibold text-2xl">${task.title}</div><div class="text-xs text-[#d4af37]/70 mt-1">Due ${formatUKDate(task.due)} · ${task.category || 'Task'}</div></div><button onclick="this.closest('.fixed').remove()" class="text-2xl opacity-70">×</button></div>
+                        <div class="text-sm mb-6 whitespace-pre-wrap">${task.desc || 'No additional instructions.'}</div>
+                        ${task.status === 'completed' ? `<div class="space-y-3"><div class="text-xs text-emerald-400 tracking-wider">SUBMITTED ${formatUKDate(task.completedDate)}</div>${renderSubmittedEvidence(task)}</div>` : isSub ? `
+                            <div class="text-xs text-[#d4af37] tracking-wider mb-3">SUBMIT REQUIRED EVIDENCE</div>
+                            <div class="space-y-4">${required.length ? required.map(evidenceInput).join('') : '<div class="text-sm opacity-60">No evidence was required.</div>'}</div>
+                            <button onclick="submitTaskEvidence(${task.id}, this)" class="w-full mt-6 py-3 bg-emerald-900 text-white rounded-2xl font-medium">Submit & Complete</button>
+                        ` : '<div class="text-sm text-[#d4af37]/70">Waiting for Jacob to complete this task.</div>'}
+                    </div>
+                </div>`;
+            document.getElementById('modal-container').appendChild(modal);
+        }
+
+        async function submitTaskEvidence(taskId, button) {
+            const task = state.tasks.find(item => item.id === taskId);
+            if (!task) return;
+            const required = task.requiredEvidence || [];
+            const evidence = [];
+            const textValue = document.getElementById('evidence-text')?.value.trim();
+            if (required.includes('text') && !textValue) return alert('Please add the required text report.');
+            if (textValue) evidence.push({ type: 'text', value: textValue });
+
+            const fileTypes = ['photo', 'video', 'voice', 'file'];
+            for (const type of fileTypes) {
+                const file = document.getElementById(`evidence-${type}`)?.files?.[0];
+                if (required.includes(type) && !file) return alert(`Please add the required ${type} evidence.`);
+            }
+
+            button.disabled = true;
+            button.textContent = 'Uploading evidence…';
+            try {
+                for (const type of fileTypes) {
+                    const file = document.getElementById(`evidence-${type}`)?.files?.[0];
+                    if (!file) continue;
+                    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+                    const reference = evidenceStorage.ref(`evidence/${task.id}/${Date.now()}-${safeName}`);
+                    await reference.put(file, { contentType: file.type });
+                    evidence.push({ type, name: file.name, url: await reference.getDownloadURL(), size: file.size });
+                }
+                task.evidence = evidence;
+                task.report = textValue || '';
+                state.evidence.unshift({ id: Date.now(), taskId: task.id, title: task.title, date: new Date().toISOString(), items: evidence });
+                button.closest('.fixed').remove();
+                completeTask(taskId);
+            } catch (error) {
+                console.error('Evidence upload failed:', error);
+                alert('The evidence could not be uploaded. Check Firebase Storage is enabled, then try again.');
+                button.disabled = false;
+                button.textContent = 'Submit & Complete';
+            }
         }
 
         function showAddTaskModal() {
@@ -630,6 +768,9 @@
                                     <label class="flex items-center gap-x-2 text-sm bg-white/5 px-3 py-1.5 rounded-2xl cursor-pointer">
                                         <input type="checkbox" id="ev-text" checked class="accent-[#8B0000]"> Text Report
                                     </label>
+                                    <label class="flex items-center gap-x-2 text-sm bg-white/5 px-3 py-1.5 rounded-2xl cursor-pointer">
+                                        <input type="checkbox" id="ev-file" class="accent-[#8B0000]"> Attachment
+                                    </label>
                                 </div>
                             </div>
                         </div>
@@ -655,6 +796,7 @@
             if (document.getElementById('ev-video').checked) requiredEvidence.push('video');
             if (document.getElementById('ev-voice').checked) requiredEvidence.push('voice');
             if (document.getElementById('ev-text').checked) requiredEvidence.push('text');
+            if (document.getElementById('ev-file').checked) requiredEvidence.push('file');
 
             const newTask = {
                 id: Date.now(),
@@ -676,7 +818,7 @@
             showConfetti(30);
         }
 
-        function completeTask(taskId, btn) {
+        function completeTask(taskId) {
             const task = state.tasks.find(t => t.id === taskId);
             if (!task) return;
             task.status = "completed";
@@ -696,6 +838,16 @@
                 showStarCelebration(starsEarned, `You completed "${task.title}" perfectly.`);
             }
             
+            renderTasks();
+            renderDashboard();
+        }
+
+        function deleteTask(taskId) {
+            const task = state.tasks.find(item => item.id === taskId);
+            if (!task || !confirm(`Remove "${task.title}"?`)) return;
+            state.tasks = state.tasks.filter(item => item.id !== taskId);
+            logActivity('dom', `Task removed: ${task.title}`);
+            saveState();
             renderTasks();
             renderDashboard();
         }
@@ -858,7 +1010,7 @@
             state.journal.forEach(entry => {
                 const div = document.createElement('div');
                 div.className = 'glass rounded-3xl p-5 cursor-pointer';
-                div.innerHTML = `<div class="font-semibold">${entry.title}</div><div class="text-xs text-[#d4af37]/70">${entry.date}</div>`;
+                div.innerHTML = `<div class="font-semibold">${entry.title}</div><div class="text-xs text-[#d4af37]/70">${formatUKDate(entry.date)}</div>`;
                 div.onclick = () => alert(entry.body);
                 container.appendChild(div);
             });
@@ -885,10 +1037,23 @@
             }
             state.evidence.forEach(ev => {
                 const div = document.createElement('div');
-                div.className = 'glass rounded-3xl p-4';
-                div.innerHTML = `<div class="font-medium">${ev.title}</div><div class="text-xs text-[#d4af37]/70">${ev.date}</div>`;
+                div.className = 'glass rounded-3xl p-4 cursor-pointer dynamic-card';
+                div.innerHTML = `<div class="font-medium">${ev.title}</div><div class="text-xs text-[#d4af37]/70">${formatUKDate(ev.date)} at ${formatUKTime(ev.date)}</div><div class="text-xs text-emerald-400 mt-2">${(ev.items || []).length} item${(ev.items || []).length === 1 ? '' : 's'} submitted · Tap to view</div>`;
+                div.onclick = () => showTaskDetailById(ev.taskId);
                 container.appendChild(div);
             });
+        }
+
+        function showSettings() {
+            const modal = document.createElement('div');
+            modal.innerHTML = `
+                <div class="fixed inset-0 bg-black/90 z-[100] flex items-end md:items-center justify-center" onclick="this.remove()">
+                    <div onclick="event.stopImmediatePropagation()" class="glass w-full max-w-md rounded-t-3xl md:rounded-3xl p-6">
+                        <div class="font-semibold text-xl mb-5">Settings</div>
+                        <button onclick="switchRole(); this.closest('.fixed').remove()" class="w-full py-3 border border-white/20 rounded-2xl">Log out</button>
+                    </div>
+                </div>`;
+            document.getElementById('modal-container').appendChild(modal);
         }
 
         // ==================== INSTALL & UPDATES ====================
@@ -945,7 +1110,7 @@
             if (role) {
                 state.currentRole = role;
                 saveState();
-                if (role === 'sub' && 'Notification' in window && Notification.permission === 'default') {
+                if ('Notification' in window && Notification.permission === 'default') {
                     Notification.requestPermission().catch(() => {});
                 }
                 document.getElementById('login-screen').classList.add('hidden');
@@ -983,7 +1148,7 @@
                 state.activityLog = [{id:1, type:"dom", message:"Welcome to The System. Your first task is waiting.", time:"now"}];
             }
 
-            knownTaskIds = new Set(state.tasks.map(task => task.id));
+            knownTaskStatuses = new Map(state.tasks.map(task => [task.id, task.status]));
             connectFirestore();
 
             updateRoleUI();
