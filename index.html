@@ -318,7 +318,6 @@
             dynamicName: APP_NAME,
             domTitle: "Sir",
             subTitle: "pup",
-            passcode: "1111",
             currentRole: "dom",
             avatar: "https://i.pravatar.cc/120?img=68",
             stars: 142,
@@ -362,11 +361,11 @@
         }
 
         function switchRole() {
-            state.currentRole = state.currentRole === 'dom' ? 'sub' : 'dom';
-            saveState();
-            updateRoleUI();
-            renderCurrentTab();
-            checkActivePunishmentBanner();
+            document.getElementById('main-app').classList.add('hidden');
+            document.getElementById('login-screen').classList.remove('hidden');
+            document.getElementById('passcode-input').value = '';
+            document.getElementById('login-error').classList.add('hidden');
+            document.getElementById('passcode-input').focus();
         }
 
         function navigateToTab(tab) {
@@ -857,9 +856,18 @@
         // ==================== LOGIN ====================
         function attemptLogin() {
             const input = document.getElementById('passcode-input').value.trim();
-            if (input === state.passcode) {
+            const roleByPasscode = {
+                "0000": "dom",
+                "1111": "sub"
+            };
+            const role = roleByPasscode[input];
+
+            if (role) {
+                state.currentRole = role;
+                saveState();
                 document.getElementById('login-screen').classList.add('hidden');
                 document.getElementById('main-app').classList.remove('hidden');
+                document.getElementById('login-error').classList.add('hidden');
                 updateRoleUI();
                 navigateToTab('dashboard');
             } else {
