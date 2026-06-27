@@ -7,5 +7,10 @@ service firebase.storage {
       allow create, update: if request.resource.size < 250 * 1024 * 1024;
       allow delete: if false;
     }
+    match /journal/{entryId}/{fileName} {
+      allow read: if true;
+      allow create, update: if request.resource.size < 250 * 1024 * 1024;
+      allow delete: if false;
+    }
   }
 }

@@ -38,6 +38,10 @@ exports.notifyTaskChanges = onDocumentUpdated(
     const beforeTasks = taskMap(before.tasks);
     const afterTasks = taskMap(after.tasks);
     const notifications = [];
+    const beforePunishments = taskMap(before.punishments);
+    const beforeDisclosures = taskMap(before.disclosures);
+    const beforeCheckIns = taskMap(before.checkIns);
+    const beforeBadges = new Set((before.badges || []).map(badge => badge.id));
 
     for (const [id, task] of afterTasks) {
       const previous = beforeTasks.get(id);
@@ -57,6 +61,36 @@ exports.notifyTaskChanges = onDocumentUpdated(
           `completed-task-${id}`,
           'https://jxmeso.github.io/the-system-app/?tab=evidence'
         ));
+      }
+    }
+
+    for (const punishment of after.punishments || []) {
+      if (!beforePunishments.has(String(punishment.id)) && punishment.status === 'active') {
+        notifications.push(sendPush(after.pushTokens?.sub, 'New punishment assigned', punishment.title || 'A punishment is now active.', `punishment-${punishment.id}`, 'https://jxmeso.github.io/the-system-app/?tab=punishments'));
+      }
+    }
+
+    for (const disclosure of after.disclosures || []) {
+      const previous = beforeDisclosures.get(String(disclosure.id));
+      if (!previous) {
+        notifications.push(sendPush(after.pushTokens?.dom, 'New private disclosure', disclosure.title || 'Jacob sent a private disclosure.', `disclosure-${disclosure.id}`, 'https://jxmeso.github.io/the-system-app/?tab=dashboard'));
+      } else if (!previous.reply && disclosure.reply) {
+        notifications.push(sendPush(after.pushTokens?.sub, 'Sir replied privately', disclosure.title || 'A reply is waiting in your inbox.', `disclosure-reply-${disclosure.id}`, 'https://jxmeso.github.io/the-system-app/?tab=dashboard'));
+      }
+    }
+
+    for (const checkIn of after.checkIns || []) {
+      const previous = beforeCheckIns.get(String(checkIn.id));
+      if (!previous && checkIn.status === 'pending') {
+        notifications.push(sendPush(after.pushTokens?.sub, 'Check-in requested', 'You have 10 minutes to complete your relationship check-in.', `checkin-${checkIn.id}`, 'https://jxmeso.github.io/the-system-app/?tab=dashboard'));
+      } else if (previous?.status === 'pending' && checkIn.status === 'completed') {
+        notifications.push(sendPush(after.pushTokens?.dom, 'Check-in completed', 'Jacob submitted relationship feedback.', `checkin-complete-${checkIn.id}`, 'https://jxmeso.github.io/the-system-app/?tab=dashboard'));
+      }
+    }
+
+    for (const badge of after.badges || []) {
+      if (!beforeBadges.has(badge.id)) {
+        notifications.push(sendPush(after.pushTokens?.sub, 'Badge awarded', 'Sir authorised a new badge for you.', `badge-${badge.id}`, 'https://jxmeso.github.io/the-system-app/?tab=stars'));
       }
     }
 

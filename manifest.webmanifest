@@ -1,0 +1,11 @@
+{
+  "name": "The System",
+  "short_name": "The System",
+  "id": "/the-system-app/",
+  "start_url": "/the-system-app/",
+  "scope": "/the-system-app/",
+  "display": "standalone",
+  "background_color": "#0f0f0f",
+  "theme_color": "#0f0f0f",
+  "icons": [{"src":"system-icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
+}
