@@ -4,6 +4,24 @@
    Replaces window.onload, nav, login screen and ALL tab renders.
    ============================================================ */
 
+/* ── Auto-update: detect new deploy, bypass PWA cache and reload ── */
+(function(){
+  try{
+    fetch('version.json?_='+Date.now(),{cache:'no-store'})
+      .then(function(r){return r.text();})
+      .then(function(raw){
+        var latest=raw.trim();
+        var stored=localStorage.getItem('_sys_deploy_ver');
+        if(stored && latest && stored!==latest){
+          localStorage.setItem('_sys_deploy_ver',latest);
+          location.reload(true);
+        } else {
+          localStorage.setItem('_sys_deploy_ver',latest);
+        }
+      }).catch(function(){});
+  }catch(_){}
+})();
+
 /* ── Constants ── */
 const SYSTEM_BADGES = [
   {id:'first-contact',name:'First Contact',icon:'fa-handshake',goal:'First successful connection.'},
