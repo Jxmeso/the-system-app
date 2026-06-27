@@ -1,6 +1,5 @@
 const { onDocumentUpdated } = require('firebase-functions/v2/firestore');
 const { initializeApp } = require('firebase-admin/app');
-const { getFirestore } = require('firebase-admin/firestore');
 const { getMessaging } = require('firebase-admin/messaging');
 const { defineSecret } = require('firebase-functions/params');
 const webpush = require('web-push');
@@ -27,13 +26,6 @@ async function sendPush(tokens, subscriptions, title, body, tag, url) {
 exports.notifyTaskChanges = onDocumentUpdated(
   { document: 'systems/shared', region: 'europe-west2', secrets: [webPushPrivateKey] },
   async event => {
-    const eventRef = getFirestore().collection('notificationEvents').doc(event.id);
-    try {
-      await eventRef.create({ processingStartedAt: new Date().toISOString() });
-    } catch (error) {
-      if (error.code === 6 || error.code === 'already-exists') return;
-      throw error;
-    }
     const before = event.data.before.data();
     const after = event.data.after.data();
     const beforeTasks = taskMap(before.tasks);
@@ -105,12 +97,6 @@ exports.notifyTaskChanges = onDocumentUpdated(
       }
     }
 
-    try {
-      await Promise.all(notifications);
-      await eventRef.set({ processedAt: new Date().toISOString(), notifications: notifications.length }, { merge: true });
-    } catch (error) {
-      await eventRef.delete();
-      throw error;
-    }
+    await Promise.all(notifications);
   }
 );
