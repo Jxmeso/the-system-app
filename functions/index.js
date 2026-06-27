@@ -36,6 +36,11 @@ exports.notifyTaskChanges = onDocumentUpdated(
     const beforeCheckIns = taskMap(before.checkIns);
     const beforeBadges = new Set((before.badges || []).map(badge => badge.id));
 
+    if (after.pushTest?.nonce && after.pushTest.nonce !== before.pushTest?.nonce) {
+      const role = after.pushTest.role === 'sub' ? 'sub' : 'dom';
+      notifications.push(sendPush(after.pushTokens?.[role], after.pushSubscriptions?.[role], 'The System Push Test', 'Closed-app notifications are working on this device.', `manual-test-${after.pushTest.nonce}`, 'https://jxmeso.github.io/the-system-app/'));
+    }
+
     for (const role of ['dom', 'sub']) {
       const oldEndpoints = new Set((before.pushSubscriptions?.[role] || []).map(subscription => subscription.endpoint));
       const newSubscriptions = (after.pushSubscriptions?.[role] || []).filter(subscription => !oldEndpoints.has(subscription.endpoint));
