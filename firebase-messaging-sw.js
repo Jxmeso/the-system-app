@@ -1,10 +1,17 @@
 self.skipWaiting();
 self.addEventListener('activate', event => event.waitUntil(self.clients.claim()));
 
-/* Always fetch the HTML page fresh — bypasses iOS PWA cache on every load */
+/* Always serve fresh HTML + our CSS/JS — bypasses iOS PWA cache completely */
 self.addEventListener('fetch', event => {
+  const url = event.request.url;
   if (event.request.mode === 'navigate') {
     event.respondWith(fetch(event.request, { cache: 'no-store' }));
+    return;
+  }
+  if (url.includes('enhancements.css') || url.includes('app-enhancements.js')) {
+    const base = url.split('?')[0];
+    event.respondWith(fetch(base, { cache: 'no-store' }));
+    return;
   }
 });
 
