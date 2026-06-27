@@ -1,23 +1,12 @@
-importScripts('https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js');
-importScripts('https://www.gstatic.com/firebasejs/10.12.5/firebase-messaging-compat.js');
-
-firebase.initializeApp({
-  apiKey: 'AIzaSyBkSgjRjcJknJNczzWGrlUmYI_LxHEsszE',
-  authDomain: 'the-system-1936e.firebaseapp.com',
-  projectId: 'the-system-1936e',
-  storageBucket: 'the-system-1936e.firebasestorage.app',
-  messagingSenderId: '59469960135',
-  appId: '1:59469960135:web:8d50dea4013ac82592bfe2'
-});
-
-const messaging = firebase.messaging();
-
-messaging.onBackgroundMessage(payload => {
-  self.registration.showNotification(payload.data?.title || 'The System', {
-    body: payload.data?.body || 'There is a new update waiting for you.',
-    data: { url: payload.data?.url || '/the-system-app/' },
-    tag: payload.data?.tag || 'the-system-update'
-  });
+self.addEventListener('push', event => {
+  let payload={};
+  try{payload=event.data?.json()||{};}catch(_){payload={body:event.data?.text()};}
+  event.waitUntil(self.registration.showNotification(payload.title||'The System',{
+    body:payload.body||'There is a new update waiting for you.',
+    data:{url:payload.url||'/the-system-app/'},
+    tag:payload.tag||'the-system-update',
+    renotify:true
+  }));
 });
 
 self.addEventListener('notificationclick', event => {

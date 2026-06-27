@@ -21,6 +21,7 @@ const LIMIT_GROUPS = [
   ['hard','Hard Limits','fa-ban','text-red-400']
 ];
 const capturedEvidence = new Map();
+const DIRECT_WEB_PUSH_KEY = 'BA9U0D5hD7CAFBz4dg8NFqzUmKX5wtJZbOznbJlc_wKPdBmQ2Co2tGvMsZevOJXs3BfE73a2BUuhEfvtP5qB-us';
 let journalCapture = null;
 let activeCapture = null;
 let countdownTimer = null;
@@ -49,21 +50,23 @@ function migrateEnhancedState() {
 }
 
 async function enablePushNotifications() {
-  if (!('Notification' in window) || !('serviceWorker' in navigator)) return false;
+  if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) return false;
   try {
     const permissionPromise = Notification.permission === 'granted' ? Promise.resolve('granted') : Notification.requestPermission();
     const permission = await permissionPromise;
     if (permission !== 'granted') { showToast('Notifications are blocked. Enable them in iPhone Settings.', 'error'); return false; }
-    if (!(await firebase.messaging.isSupported())) return false;
     const registration = await navigator.serviceWorker.register('./firebase-messaging-sw.js', {scope:'./'});
-    const messaging = firebase.messaging();
-    const token = await messaging.getToken({vapidKey:FCM_VAPID_KEY,serviceWorkerRegistration:registration});
-    if (!token) throw new Error('No notification token returned');
+    await navigator.serviceWorker.ready;
+    const applicationKey=urlBase64ToUint8Array(DIRECT_WEB_PUSH_KEY);
+    let existing = await registration.pushManager.getSubscription();
+    if(existing?.options?.applicationServerKey){const oldKey=new Uint8Array(existing.options.applicationServerKey);if(oldKey.length!==applicationKey.length||oldKey.some((byte,index)=>byte!==applicationKey[index])){await existing.unsubscribe();existing=null;}}
+    const subscription = existing || await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:applicationKey});
+    if (!subscription) throw new Error('No push subscription returned');
     const snapshot = await sharedStateDocument.get();
-    const remoteTokens = snapshot.data()?.pushTokens || {dom:[],sub:[]};
-    const roleTokens = [...new Set([...(remoteTokens[state.currentRole] || []), token])];
-    state.pushTokens = {...remoteTokens,[state.currentRole]:roleTokens};
-    await sharedStateDocument.set({pushTokens:state.pushTokens},{merge:true});
+    const remoteSubscriptions = snapshot.data()?.pushSubscriptions || {dom:[],sub:[]};
+    const roleSubscriptions = [...(remoteSubscriptions[state.currentRole] || []).filter(item=>item.endpoint!==subscription.endpoint),subscription.toJSON()];
+    state.pushSubscriptions = {...remoteSubscriptions,[state.currentRole]:roleSubscriptions};
+    await sharedStateDocument.set({pushSubscriptions:state.pushSubscriptions},{merge:true});
     localStorage.setItem('the_system_push_ready','true');
     showToast('Notifications Enabled', 'success');
     return true;
@@ -72,6 +75,10 @@ async function enablePushNotifications() {
     showToast('Could Not Enable Notifications', 'error');
     return false;
   }
+}
+
+function urlBase64ToUint8Array(value){
+  const padding='='.repeat((4-value.length%4)%4),base64=(value+padding).replace(/-/g,'+').replace(/_/g,'/'),raw=atob(base64);return Uint8Array.from([...raw].map(char=>char.charCodeAt(0)));
 }
 
 function showToast(message,type='info') {
