@@ -35,6 +35,8 @@ exports.notifyTaskChanges = onDocumentUpdated(
     const beforeDisclosures = taskMap(before.disclosures);
     const beforeCheckIns = taskMap(before.checkIns);
     const beforeBadges = new Set((before.badges || []).map(badge => badge.id));
+    const beforeJournal = taskMap(before.journal);
+    const beforeStarLog = new Set((before.starLog || []).map(entry => String(entry.id)));
 
     if (after.pushTest?.nonce && after.pushTest.nonce !== before.pushTest?.nonce) {
       const role = after.pushTest.role === 'sub' ? 'sub' : 'dom';
@@ -73,9 +75,20 @@ exports.notifyTaskChanges = onDocumentUpdated(
     }
 
     for (const punishment of after.punishments || []) {
-      if (!beforePunishments.has(String(punishment.id)) && punishment.status === 'active') {
+      const previous = beforePunishments.get(String(punishment.id));
+      if (!previous && punishment.status === 'active') {
         notifications.push(sendPush(after.pushTokens?.sub, after.pushSubscriptions?.sub, 'New punishment assigned', punishment.title || 'A punishment is now active.', `punishment-${punishment.id}`, 'https://jxmeso.github.io/the-system-app/?tab=punishments'));
+      } else if (previous?.status === 'active' && punishment.status === 'completed') {
+        notifications.push(sendPush(after.pushTokens?.dom, after.pushSubscriptions?.dom, 'Punishment completed', punishment.title || 'A punishment has ended.', `punishment-complete-${punishment.id}`, 'https://jxmeso.github.io/the-system-app/?tab=punishments'));
       }
+    }
+
+    for (const entry of after.journal || []) {
+      if (!beforeJournal.has(String(entry.id))) notifications.push(sendPush(after.pushTokens?.dom, after.pushSubscriptions?.dom, 'New journal entry', entry.title || 'Jacob added a journal entry.', `journal-${entry.id}`, 'https://jxmeso.github.io/the-system-app/?tab=journal'));
+    }
+
+    for (const award of after.starLog || []) {
+      if (!beforeStarLog.has(String(award.id)) && !String(award.reason || '').startsWith('Completed:')) notifications.push(sendPush(after.pushTokens?.sub, after.pushSubscriptions?.sub, 'Stars awarded', `${award.amount || 1} star${award.amount === 1 ? '' : 's'}: ${award.reason || 'Award from Sir'}`, `stars-${award.id}`, 'https://jxmeso.github.io/the-system-app/?tab=stars'));
     }
 
     for (const disclosure of after.disclosures || []) {
