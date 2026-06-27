@@ -4,14 +4,16 @@
    Replaces window.onload, nav, login screen and ALL tab renders.
    ============================================================ */
 
-/* ── Hard version gate — fires ONCE on first load of this build, then never again ── */
+/* ── Version gate: forces one clean navigation when new build detected ── */
 (function(){
-  var BUILD='v5-20260628-02';
-  if(localStorage.getItem('_sys_build')!==BUILD){
-    localStorage.setItem('_sys_build',BUILD);
-    location.reload(true);
-    throw new Error('reloading');
-  }
+  var BUILD='v5-20260628-03';
+  try{
+    if(localStorage.getItem('_sys_build')!==BUILD){
+      try{localStorage.setItem('_sys_build',BUILD);}catch(_){}
+      location.replace(location.href.replace(/[?#].*$/,''));
+    }
+  }catch(_){}
+  /* execution always continues — window.onload=enhancedInitialize is set below */
 })();
 
 /* ── Constants ── */
