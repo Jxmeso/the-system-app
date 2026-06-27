@@ -330,6 +330,7 @@
         firebase.initializeApp(firebaseConfig);
         const sharedStateDocument = firebase.firestore().collection('systems').doc('shared');
         const evidenceStorage = firebase.storage();
+        evidenceStorage.setMaxUploadRetryTime(30000);
         let firestoreConnected = false;
         let applyingRemoteState = false;
         let knownTaskStatuses = new Map();
@@ -737,27 +738,69 @@
             }
 
             button.disabled = true;
-            button.textContent = 'Uploading evidence…';
+            button.textContent = 'Checking upload service…';
             try {
+                const hasFileEvidence = fileTypes.some(type => document.getElementById(`evidence-${type}`)?.files?.[0]);
+                if (hasFileEvidence) {
+                    const storageCheck = await fetch(`https://firebasestorage.googleapis.com/v0/b/${firebaseConfig.storageBucket}/o?maxResults=1&t=${Date.now()}`, { cache: 'no-store' });
+                    if (storageCheck.status === 404) throw new Error('STORAGE_NOT_CONFIGURED');
+                }
                 for (const type of fileTypes) {
                     const file = document.getElementById(`evidence-${type}`)?.files?.[0];
                     if (!file) continue;
                     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
                     const reference = evidenceStorage.ref(`evidence/${task.id}/${Date.now()}-${safeName}`);
-                    await reference.put(file, { contentType: file.type });
-                    evidence.push({ type, name: file.name, url: await reference.getDownloadURL(), size: file.size });
+                    const url = await uploadEvidenceFile(reference, file, button);
+                    evidence.push({ type, name: file.name, url, size: file.size });
                 }
                 task.evidence = evidence;
                 task.report = textValue || '';
                 state.evidence.unshift({ id: Date.now(), taskId: task.id, title: task.title, date: new Date().toISOString(), items: evidence });
+                button.textContent = 'Saving completion…';
+                await completeTask(taskId);
                 button.closest('.fixed').remove();
-                completeTask(taskId);
             } catch (error) {
                 console.error('Evidence upload failed:', error);
-                alert('The evidence could not be uploaded. Check Firebase Storage is enabled, then try again.');
+                const message = error.message === 'STORAGE_NOT_CONFIGURED'
+                    ? 'Firebase Storage has not been created yet. Open Firebase Console → Storage → Get started, then retry.'
+                    : error.code === 'storage/unauthorized'
+                        ? 'Firebase Storage permissions are blocking uploads. Update the Storage rules, then retry.'
+                        : 'The upload failed or stopped responding. Check the connection and try again.';
+                alert(message);
                 button.disabled = false;
                 button.textContent = 'Submit & Complete';
             }
+        }
+
+        function uploadEvidenceFile(reference, file, button) {
+            return new Promise((resolve, reject) => {
+                const upload = reference.put(file, { contentType: file.type });
+                let lastProgressAt = Date.now();
+                let lastBytes = 0;
+                const stalledUpload = setInterval(() => {
+                    if (Date.now() - lastProgressAt > 30000) {
+                        upload.cancel();
+                        clearInterval(stalledUpload);
+                        reject(new Error('UPLOAD_STALLED'));
+                    }
+                }, 3000);
+
+                upload.on('state_changed', snapshot => {
+                    if (snapshot.bytesTransferred > lastBytes) {
+                        lastBytes = snapshot.bytesTransferred;
+                        lastProgressAt = Date.now();
+                    }
+                    const percent = snapshot.totalBytes ? Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100) : 0;
+                    button.textContent = `Uploading ${file.name} · ${percent}%`;
+                }, error => {
+                    clearInterval(stalledUpload);
+                    reject(error);
+                }, async () => {
+                    clearInterval(stalledUpload);
+                    try { resolve(await reference.getDownloadURL()); }
+                    catch (error) { reject(error); }
+                });
+            });
         }
 
         function showAddTaskModal() {
@@ -848,9 +891,10 @@
             showConfetti(30);
         }
 
-        function completeTask(taskId) {
+        async function completeTask(taskId) {
             const task = state.tasks.find(t => t.id === taskId);
             if (!task) return;
+            const previousState = JSON.stringify(state);
             task.status = "completed";
             task.completedDate = new Date().toISOString().split('T')[0];
             
@@ -858,9 +902,18 @@
             state.stars += starsEarned;
             state.starLog.unshift({id: Date.now(), date: task.completedDate, reason: `Completed: ${task.title}`, amount: starsEarned});
             
-            logActivity('sub', `Completed task: ${task.title}`);
-            
-            saveState();
+            const time = formatUKTime();
+            state.activityLog.unshift({ id: Date.now(), type: 'sub', message: `Completed task: ${task.title}`, time });
+            if (state.activityLog.length > 40) state.activityLog.pop();
+
+            localStorage.setItem('the_system_v4', JSON.stringify(state));
+            try {
+                await sharedStateDocument.set(getSharedState());
+            } catch (error) {
+                state = JSON.parse(previousState);
+                localStorage.setItem('the_system_v4', previousState);
+                throw error;
+            }
             showConfetti(50);
             
             // Big celebration for sub
@@ -1048,7 +1101,20 @@
 
         function renderLimits() {
             const container = document.getElementById('limits-container');
-            container.innerHTML = `<div class="text-sm text-[#d4af37]/60 px-3">Limits system is active. You can add and update items.</div>`;
+            const groups = [
+                ['likes', 'Likes'], ['loves', 'Loves'], ['tries', 'Willing to try'],
+                ['supplements', 'With conditions'], ['hard', 'Hard limits']
+            ];
+            const populated = groups.filter(([key]) => (state.limits[key] || []).length);
+            if (!populated.length) {
+                container.innerHTML = `<div class="text-sm text-[#d4af37]/60 px-3">No limits have been added yet.</div>`;
+                return;
+            }
+            container.innerHTML = populated.map(([key, label]) => `
+                <div class="glass rounded-3xl p-5">
+                    <div class="font-semibold mb-3">${label}</div>
+                    <div class="space-y-2">${state.limits[key].map(item => `<div class="text-sm bg-white/5 rounded-2xl px-4 py-2">${item}</div>`).join('')}</div>
+                </div>`).join('');
         }
 
         function renderRules() {
@@ -1084,6 +1150,98 @@
                     </div>
                 </div>`;
             document.getElementById('modal-container').appendChild(modal);
+        }
+
+        function showProfileModal() {
+            const modal = document.createElement('div');
+            modal.innerHTML = `
+                <div class="fixed inset-0 bg-black/90 z-[100] flex items-center justify-center p-6" onclick="this.remove()">
+                    <div onclick="event.stopImmediatePropagation()" class="glass w-full max-w-md rounded-3xl p-7 text-center">
+                        <img src="${state.avatar}" class="w-24 h-24 rounded-3xl object-cover mx-auto mb-4" alt="Profile">
+                        <div class="text-3xl heading-serif">${state.currentRole === 'dom' ? state.domTitle : state.subTitle}</div>
+                        <div class="text-sm text-[#d4af37]/70 mt-1">${state.currentRole === 'dom' ? 'Dominant' : 'Submissive'}</div>
+                        <button onclick="this.closest('.fixed').remove()" class="w-full mt-6 py-3 bg-white/10 rounded-2xl">Close</button>
+                    </div>
+                </div>`;
+            document.getElementById('modal-container').appendChild(modal);
+        }
+
+        function showNewJournalModal() {
+            const modal = document.createElement('div');
+            modal.innerHTML = `
+                <div class="fixed inset-0 bg-black/90 z-[100] flex items-end md:items-center justify-center" onclick="this.remove()">
+                    <div onclick="event.stopImmediatePropagation()" class="glass w-full max-w-md rounded-t-3xl md:rounded-3xl p-6">
+                        <div class="font-semibold text-xl mb-5">New Journal Entry</div>
+                        <input id="journal-title" class="beautiful-input w-full px-4 py-3 rounded-2xl mb-3" placeholder="Title">
+                        <textarea id="journal-body" rows="7" class="beautiful-input w-full px-4 py-3 rounded-2xl" placeholder="Write your entry..."></textarea>
+                        <button onclick="addJournalEntry(this)" class="w-full mt-5 py-3 bg-[#8B0000] rounded-2xl">Save Entry</button>
+                    </div>
+                </div>`;
+            document.getElementById('modal-container').appendChild(modal);
+        }
+
+        function addJournalEntry(button) {
+            const title = document.getElementById('journal-title').value.trim() || 'Journal entry';
+            const body = document.getElementById('journal-body').value.trim();
+            if (!body) return alert('Please write something before saving.');
+            state.journal.unshift({ id: Date.now(), title, body, date: new Date().toISOString().split('T')[0] });
+            logActivity('sub', `Added journal entry: ${title}`);
+            saveState();
+            button.closest('.fixed').remove();
+            renderJournal();
+            renderDashboard();
+        }
+
+        function showAddLimitModal() {
+            const modal = document.createElement('div');
+            modal.innerHTML = `
+                <div class="fixed inset-0 bg-black/90 z-[100] flex items-end md:items-center justify-center" onclick="this.remove()">
+                    <div onclick="event.stopImmediatePropagation()" class="glass w-full max-w-md rounded-t-3xl md:rounded-3xl p-6">
+                        <div class="font-semibold text-xl mb-5">Add Limit</div>
+                        <select id="limit-category" class="beautiful-input w-full px-4 py-3 rounded-2xl mb-3"><option value="likes">Likes</option><option value="loves">Loves</option><option value="tries">Willing to try</option><option value="supplements">With conditions</option><option value="hard">Hard limit</option></select>
+                        <input id="limit-text" class="beautiful-input w-full px-4 py-3 rounded-2xl" placeholder="Describe the limit">
+                        <button onclick="addLimit(this)" class="w-full mt-5 py-3 bg-[#8B0000] rounded-2xl">Add</button>
+                    </div>
+                </div>`;
+            document.getElementById('modal-container').appendChild(modal);
+        }
+
+        function addLimit(button) {
+            const category = document.getElementById('limit-category').value;
+            const text = document.getElementById('limit-text').value.trim();
+            if (!text) return alert('Please describe the limit.');
+            if (!Array.isArray(state.limits[category])) state.limits[category] = [];
+            state.limits[category].push(text);
+            saveState();
+            button.closest('.fixed').remove();
+            renderLimits();
+        }
+
+        function editSection(section) {
+            const labels = { houseRules: 'House Rules', protocols: 'Protocols', arrivalProcedure: 'Arrival Procedure', consequences: 'Consequences' };
+            const modal = document.createElement('div');
+            modal.innerHTML = `
+                <div class="fixed inset-0 bg-black/90 z-[100] flex items-end md:items-center justify-center" onclick="this.remove()">
+                    <div onclick="event.stopImmediatePropagation()" class="glass w-full max-w-lg rounded-t-3xl md:rounded-3xl p-6">
+                        <div class="font-semibold text-xl mb-5">Edit ${labels[section]}</div>
+                        <textarea id="section-editor" rows="10" class="beautiful-input w-full px-4 py-3 rounded-2xl"></textarea>
+                        <button onclick="saveSection('${section}', this)" class="w-full mt-5 py-3 bg-[#8B0000] rounded-2xl">Save Changes</button>
+                    </div>
+                </div>`;
+            document.getElementById('modal-container').appendChild(modal);
+            document.getElementById('section-editor').value = state.rules[section] || '';
+        }
+
+        function saveSection(section, button) {
+            state.rules[section] = document.getElementById('section-editor').value.trim();
+            saveState();
+            button.closest('.fixed').remove();
+            renderRules();
+        }
+
+        function showAddEvidenceModal() {
+            alert('Open the relevant task to submit its required evidence.');
+            navigateToTab('tasks');
         }
 
         // ==================== INSTALL & UPDATES ====================
