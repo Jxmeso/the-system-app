@@ -12,7 +12,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="The System">
     <meta name="theme-color" content="#0f0f0f">
-    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="manifest" href="manifest.webmanifest?v={{ site.github.build_revision }}">
     <title>The System</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -1383,7 +1383,7 @@
 
         window.onload = initializeApp;
     </script>
-    <link rel="stylesheet" href="enhancements.css">
-    <script src="app-enhancements.js"></script>
+    <link rel="stylesheet" href="enhancements.css?v={{ site.github.build_revision }}">
+    <script src="app-enhancements.js?v={{ site.github.build_revision }}"></script>
 </body>
 </html>
