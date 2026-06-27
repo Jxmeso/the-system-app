@@ -44,6 +44,14 @@ exports.notifyTaskChanges = onDocumentUpdated(
     const beforeCheckIns = taskMap(before.checkIns);
     const beforeBadges = new Set((before.badges || []).map(badge => badge.id));
 
+    for (const role of ['dom', 'sub']) {
+      const oldEndpoints = new Set((before.pushSubscriptions?.[role] || []).map(subscription => subscription.endpoint));
+      const newSubscriptions = (after.pushSubscriptions?.[role] || []).filter(subscription => !oldEndpoints.has(subscription.endpoint));
+      if (newSubscriptions.length) {
+        notifications.push(sendPush([], newSubscriptions, 'Background alerts enabled', 'This device will now receive notifications while The System is closed.', `push-ready-${role}`, 'https://jxmeso.github.io/the-system-app/'));
+      }
+    }
+
     for (const [id, task] of afterTasks) {
       const previous = beforeTasks.get(id);
       if (!previous && task.status === 'pending') {
