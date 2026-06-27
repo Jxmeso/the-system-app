@@ -310,9 +310,25 @@
 
     <div id="modal-container"></div>
 
+    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
     <script>
         // ==================== CONFIG ====================
         const APP_NAME = "The System";
+        const firebaseConfig = {
+            apiKey: "AIzaSyBkSgjRjcJknJNczzWGrlUmYI_LxHEsszE",
+            authDomain: "the-system-1936e.firebaseapp.com",
+            projectId: "the-system-1936e",
+            storageBucket: "the-system-1936e.firebasestorage.app",
+            messagingSenderId: "59469960135",
+            appId: "1:59469960135:web:8d50dea4013ac82592bfe2",
+            measurementId: "G-S81JE8Z7WM"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const sharedStateDocument = firebase.firestore().collection('systems').doc('shared');
+        let firestoreConnected = false;
+        let applyingRemoteState = false;
+        let knownTaskIds = new Set();
         
         let state = {
             dynamicName: APP_NAME,
@@ -338,10 +354,72 @@
             evidenceTypesAllowed: { photo: true, video: true, voice: true, text: true }
         };
 
-        function saveState() { localStorage.setItem('the_system_v4', JSON.stringify(state)); }
+        function getSharedState() {
+            const { currentRole, passcode, ...sharedState } = state;
+            return sharedState;
+        }
+
+        function saveState() {
+            localStorage.setItem('the_system_v4', JSON.stringify(state));
+            if (firestoreConnected && !applyingRemoteState) {
+                sharedStateDocument.set(getSharedState()).catch(error => {
+                    console.error('Could not sync changes to Firebase:', error);
+                });
+            }
+        }
+
         function loadState() {
             const saved = localStorage.getItem('the_system_v4');
             if (saved) state = { ...state, ...JSON.parse(saved) };
+        }
+
+        function connectFirestore() {
+            sharedStateDocument.onSnapshot(snapshot => {
+                if (!snapshot.exists) {
+                    firestoreConnected = true;
+                    sharedStateDocument.set(getSharedState()).catch(console.error);
+                    knownTaskIds = new Set(state.tasks.map(task => task.id));
+                    return;
+                }
+
+                const remoteState = snapshot.data();
+                const remoteTasks = remoteState.tasks || [];
+                const newTasks = firestoreConnected
+                    ? remoteTasks.filter(task => !knownTaskIds.has(task.id) && task.status === 'pending')
+                    : [];
+
+                applyingRemoteState = true;
+                const localRole = state.currentRole;
+                state = { ...state, ...remoteState, currentRole: localRole };
+                localStorage.setItem('the_system_v4', JSON.stringify(state));
+                applyingRemoteState = false;
+                firestoreConnected = true;
+                knownTaskIds = new Set(remoteTasks.map(task => task.id));
+
+                updateRoleUI();
+                renderCurrentTab();
+                if (newTasks.length && state.currentRole === 'sub') showIncomingTask(newTasks[0]);
+            }, error => {
+                console.error('Firebase connection failed:', error);
+            });
+        }
+
+        function showIncomingTask(task) {
+            if ('Notification' in window && Notification.permission === 'granted') {
+                try { new Notification('New task assigned', { body: task.title }); } catch (_) {}
+            }
+            const modal = document.createElement('div');
+            modal.innerHTML = `
+                <div class="fixed inset-0 bg-black/90 z-[200] flex items-center justify-center p-6" onclick="this.remove()">
+                    <div onclick="event.stopImmediatePropagation()" class="glass w-full max-w-md rounded-3xl p-7 text-center">
+                        <i class="fa-solid fa-bell text-[#d4af37] text-4xl mb-4"></i>
+                        <div class="text-xs text-[#d4af37] tracking-widest mb-2">NEW TASK ASSIGNED</div>
+                        <div class="text-2xl font-semibold mb-2">${task.title}</div>
+                        <div class="text-sm opacity-80 mb-6">${task.desc || ''}</div>
+                        <button onclick="this.closest('.fixed').remove(); navigateToTab('tasks')" class="w-full py-3 bg-[#8B0000] text-white rounded-2xl">View Task</button>
+                    </div>
+                </div>`;
+            document.getElementById('modal-container').appendChild(modal);
         }
 
         // ==================== UI & ROLE ====================
@@ -867,6 +945,9 @@
             if (role) {
                 state.currentRole = role;
                 saveState();
+                if (role === 'sub' && 'Notification' in window && Notification.permission === 'default') {
+                    Notification.requestPermission().catch(() => {});
+                }
                 document.getElementById('login-screen').classList.add('hidden');
                 document.getElementById('main-app').classList.remove('hidden');
                 document.getElementById('login-error').classList.add('hidden');
@@ -901,6 +982,9 @@
             if (state.activityLog.length === 0) {
                 state.activityLog = [{id:1, type:"dom", message:"Welcome to The System. Your first task is waiting.", time:"now"}];
             }
+
+            knownTaskIds = new Set(state.tasks.map(task => task.id));
+            connectFirestore();
 
             updateRoleUI();
             navigateToTab('dashboard');
