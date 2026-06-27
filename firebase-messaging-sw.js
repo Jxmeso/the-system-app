@@ -1,7 +1,15 @@
 self.skipWaiting();
-self.addEventListener('activate', event => event.waitUntil(self.clients.claim()));
 
-/* Always serve fresh HTML + our CSS/JS — bypasses iOS PWA cache completely */
+/* On activate: claim all clients then force-navigate each one through this SW
+   so the fetch handler below serves fresh HTML immediately */
+self.addEventListener('activate', event => event.waitUntil(
+  self.clients.claim().then(() =>
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+      .then(cs => Promise.all(cs.map(c => c.navigate(c.url))))
+  )
+));
+
+/* Serve HTML, CSS and JS fresh from network every time — no cache */
 self.addEventListener('fetch', event => {
   const url = event.request.url;
   if (event.request.mode === 'navigate') {
@@ -9,8 +17,7 @@ self.addEventListener('fetch', event => {
     return;
   }
   if (url.includes('enhancements.css') || url.includes('app-enhancements.js')) {
-    const base = url.split('?')[0];
-    event.respondWith(fetch(base, { cache: 'no-store' }));
+    event.respondWith(fetch(url.split('?')[0], { cache: 'no-store' }));
     return;
   }
 });
