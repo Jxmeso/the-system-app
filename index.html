@@ -313,10 +313,12 @@
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-storage-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-messaging-compat.js"></script>
     <script>
         // ==================== CONFIG ====================
         const APP_NAME = "The System";
         const CURRENT_BUILD = "{{ site.github.build_revision }}";
+        const FCM_VAPID_KEY = "BOb5JplTUb5MKS-R8Pct8TRLMSOBvJKk1nMP1dFs2xxdBg7PW4LLAlQaewjzFhmYUFmOTu9J3COB2tTnDiGKNyk";
         let updateCheckInProgress = false;
         const firebaseConfig = {
             apiKey: "AIzaSyBkSgjRjcJknJNczzWGrlUmYI_LxHEsszE",
@@ -331,6 +333,7 @@
         const sharedStateDocument = firebase.firestore().collection('systems').doc('shared');
         const evidenceStorage = firebase.storage();
         evidenceStorage.setMaxUploadRetryTime(30000);
+        const pushMessaging = firebase.messaging.isSupported() ? firebase.messaging() : null;
         let firestoreConnected = false;
         let applyingRemoteState = false;
         let knownTaskStatuses = new Map();
@@ -381,6 +384,30 @@
             lockedSections: { limits: false },
             evidenceTypesAllowed: { photo: true, video: true, voice: true, text: true }
         };
+
+        async function enablePushNotifications() {
+            if (!pushMessaging || !('serviceWorker' in navigator) || !('Notification' in window)) return;
+            try {
+                const registration = await navigator.serviceWorker.register('./firebase-messaging-sw.js', { scope: './' });
+                const permission = Notification.permission === 'granted'
+                    ? 'granted'
+                    : await Notification.requestPermission();
+                if (permission !== 'granted') return;
+                const token = await pushMessaging.getToken({
+                    vapidKey: FCM_VAPID_KEY,
+                    serviceWorkerRegistration: registration
+                });
+                if (!token) return;
+                if (!state.pushTokens) state.pushTokens = { dom: [], sub: [] };
+                if (!Array.isArray(state.pushTokens[state.currentRole])) state.pushTokens[state.currentRole] = [];
+                if (!state.pushTokens[state.currentRole].includes(token)) {
+                    state.pushTokens[state.currentRole].push(token);
+                    saveState();
+                }
+            } catch (error) {
+                console.error('Push notification setup failed:', error);
+            }
+        }
 
         function getSharedState() {
             const { currentRole, passcode, ...sharedState } = state;
@@ -1298,14 +1325,13 @@
             if (role) {
                 state.currentRole = role;
                 saveState();
-                if ('Notification' in window && Notification.permission === 'default') {
-                    Notification.requestPermission().catch(() => {});
-                }
+                enablePushNotifications();
                 document.getElementById('login-screen').classList.add('hidden');
                 document.getElementById('main-app').classList.remove('hidden');
                 document.getElementById('login-error').classList.add('hidden');
                 updateRoleUI();
-                navigateToTab('dashboard');
+                const requestedTab = new URLSearchParams(window.location.search).get('tab');
+                navigateToTab(document.getElementById(`tab-${requestedTab}`) ? requestedTab : 'dashboard');
             } else {
                 document.getElementById('login-error').classList.remove('hidden');
             }
