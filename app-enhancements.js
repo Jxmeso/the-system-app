@@ -6,7 +6,7 @@
 
 /* ── Version gate: forces one clean navigation when new build detected ── */
 (function(){
-  var BUILD='v5-20260628-16';
+  var BUILD='v5-20260628-17';
   try{
     if(localStorage.getItem('_sys_build')!==BUILD){
       try{localStorage.setItem('_sys_build',BUILD);}catch(_){}
@@ -701,6 +701,7 @@ function showDomTools(){
     ['fa-sliders','Send Check-In','var(--blue)','sendCheckIn()'],
     ['fa-hands-holding-circle','Send Helper','var(--sage)','showSendHelper()'],
     ['fa-clock-rotate-left','Send Memory','var(--rose)','showSendMemory()'],
+    ['fa-photo-film','View Memories','var(--rose)','showMemoriesReview()'],
     ['fa-inbox','Requests','var(--gold)','showRequestsReview()'],
     ['fa-lightbulb','Suggestion Box','var(--blue)','toggleSuggestionBox()'],
     ['fa-clipboard-question','View Check-Ins','var(--sage)','showCheckInModal()']
@@ -798,6 +799,13 @@ function viewMemory(id){
   m.innerHTML=`<div class="fixed inset-0 z-[200] flex items-end md:items-center justify-center" style="background:rgba(0,0,0,.95)" onclick="this.remove()"><div onclick="event.stopImmediatePropagation()" class="glass" style="width:100%;max-width:34rem;max-height:94vh;overflow:auto;border-radius:2rem 2rem 0 0;padding:1.5rem;padding-bottom:max(1.5rem,env(safe-area-inset-bottom))"><div style="font-size:.65rem;letter-spacing:3px;color:var(--rose)">MEMORY FROM JAMES</div><div style="margin:1rem 0">${media}</div>${state.currentRole==='sub'?`<div style="font-size:.7rem;color:var(--gold);margin-bottom:.4rem">REFLECT — what does this bring up for you?</div><textarea id="mem-reflect" rows="4" onpaste="return false" class="beautiful-input no-paste" style="width:100%;padding:.85rem 1rem;border-radius:1rem;resize:none" placeholder="Write your reflection for James…"></textarea><button onclick="submitMemoryReflection('${id}',this)" style="width:100%;margin-top:1rem;padding:.85rem;background:var(--red);border-radius:1rem;color:#fff">Send reflection to James</button>`:`<div style="font-size:.85rem;color:var(--stone)">${mm.reflection?'<b>Jacob:</b> '+escapeText(mm.reflection):'No reflection yet.'}</div>`}<button onclick="this.closest('.fixed').remove()" style="width:100%;margin-top:.5rem;padding:.6rem;color:var(--stone);font-size:.8rem">Close</button></div></div>`;
   document.getElementById('modal-container').appendChild(m);
   renderDashboard();
+}
+function showMemoriesReview(){
+  if(state.currentRole!=='dom')return;
+  const mems=ensureArray(state.memories);
+  const m=document.createElement('div');
+  m.innerHTML=`<div class="fixed inset-0 bg-black/90 z-[150] flex items-end md:items-center justify-center" onclick="this.remove()"><div onclick="event.stopImmediatePropagation()" class="glass" style="width:100%;max-width:32rem;max-height:90vh;overflow:auto;border-radius:2rem 2rem 0 0;padding:1.5rem;padding-bottom:max(1.5rem,env(safe-area-inset-bottom))"><div style="font-size:1.25rem;font-weight:600;margin-bottom:1rem">Memories Sent</div><div style="display:flex;flex-direction:column;gap:.6rem">${mems.length?mems.map(mm=>`<button onclick="viewMemory('${mm.id}')" class="tap subtle-card" style="text-align:left;padding:.9rem 1rem;display:flex;justify-content:space-between;align-items:center"><div style="flex:1;min-width:0"><div style="font-weight:600;font-size:.9rem"><i class="fa-solid ${mm.item&&mm.item.type==='video'?'fa-video':mm.item&&mm.item.type==='voice'?'fa-microphone':'fa-image'}" style="margin-right:.4rem;color:var(--rose)"></i>${titleCase(mm.item&&mm.item.type||'memory')} · ${escapeText(mm.item&&mm.item.from||'')}</div><div style="font-size:.72rem;color:var(--stone);margin-top:.2rem">${mm.reflectionDone?'Reflection: '+escapeText((mm.reflection||'').slice(0,50)):(mm.viewed?'Viewed, awaiting reflection':'Not viewed yet')}</div></div><i class="fa-solid fa-chevron-right" style="color:rgba(198,166,66,.4);flex-shrink:0;margin-left:.5rem"></i></button>`).join(''):'<div style="opacity:.6">No memories sent yet.</div>'}</div></div></div>`;
+  document.getElementById('modal-container').appendChild(m);
 }
 function submitMemoryReflection(id,button){
   const mm=ensureArray(state.memories).find(x=>x.id===id); if(!mm)return;
@@ -991,11 +999,12 @@ function renderTasks(){
     <div style="margin-top:1.5rem">
       <div style="font-size:.65rem;color:var(--stone);letter-spacing:3px;margin-bottom:.75rem;padding-left:.25rem">COMPLETED</div>
       <div style="display:flex;flex-direction:column;gap:.5rem">
-        ${completed.slice(0,10).map(t=>`
-          <div class="glass" style="padding:.75rem 1rem;border-radius:1rem;display:flex;justify-content:space-between;align-items:center">
-            <span style="font-size:.85rem">${escapeText(titleCase(t.title))}</span>
-            <span style="font-size:.7rem;color:#34d399"><i class="fa-solid fa-check" style="margin-right:.25rem"></i>${formatUKDate(t.completedDate)}</span>
-          </div>
+        ${completed.slice(0,15).map(t=>`
+          <button onclick="showTaskDetailById(${t.id})" class="glass tap" style="width:100%;text-align:left;padding:.85rem 1rem;border-radius:1rem;display:flex;justify-content:space-between;align-items:center;gap:.75rem">
+            <span style="font-size:.85rem;flex:1">${escapeText(titleCase(t.title))}${ensureArray(t.evidence).length?` <span style="color:rgba(198,166,66,.6);font-size:.7rem">· ${ensureArray(t.evidence).length} item${ensureArray(t.evidence).length>1?'s':''}</span>`:''}${t.reviewed?'':` <span style="color:var(--gold);font-size:.66rem">· review</span>`}</span>
+            <span style="font-size:.7rem;color:#34d399;flex-shrink:0"><i class="fa-solid fa-check" style="margin-right:.25rem"></i>${formatUKDate(t.completedDate)}</span>
+            <i class="fa-solid fa-chevron-right" style="color:rgba(198,166,66,.4);flex-shrink:0"></i>
+          </button>
         `).join('')}
       </div>
     </div>`:''}
