@@ -6,7 +6,7 @@
 
 /* ── Version gate: forces one clean navigation when new build detected ── */
 (function(){
-  var BUILD='v5-20260628-18';
+  var BUILD='v5-20260628-19';
   try{
     if(localStorage.getItem('_sys_build')!==BUILD){
       try{localStorage.setItem('_sys_build',BUILD);}catch(_){}
@@ -119,7 +119,7 @@ function defaultSystemState(role){
     notifications:[],readNotifIds:[],disclosures:[],checkIns:[],badges:[],customBadges:[],dataVersion:6,
     hideHardLimits:false,auth:{configured:false},pinFails:0,appLock:{locked:false},forceJacobPinChange:false,
     voice:{enabled:false,samples:[]},
-    requests:[],helpers:[],memories:[],suggestions:[],suggestionBoxOpen:false,activeCheckIn:null,
+    requests:[],helpers:[],memories:[],suggestions:[],suggestionBoxOpen:false,requestBoxOpen:true,activeCheckIn:null,redactedRecords:[],
     subProfile:defaultSubProfile(),bodyMaps:defaultBodyMaps(),personalRecords:defaultPersonalRecords(),
     appSettings:{reduceMotion:false,starSpending:true}
   };
@@ -131,6 +131,27 @@ const HELPER_TYPES = [
   ['timeout','Time Out','fa-hourglass-half','#c77d3a'],
   ['linewriting','Line Writing','fa-pen-nib','#315b7a']
 ];
+/* End-of-video messages from James — degradation/praise play, Title Case.
+   Consensual D/s between James and Jacob. A random one shows after the red flash. */
+const PRAISE_MESSAGES = [
+  'Such A Good Boy','Such A Little Fag','Well Done, Boy',"Who's A Good Boy Now?",
+  'And Control, You? Fuck, Yes!',"Let's Hope That Was Good Enough…",'Well, That Was A Good One',
+  "You Look Pathetic. Wait, Was That A Mistake? We'll Have To See…",
+  'Oh My God, You Must Feel So Humiliated Right Now','Pathetic Little Boy Of Mine',
+  'This Is A Random Message, But You Should Ask Me To Punish You For No Reason. Do It Now',
+  'You Belong To Me Now',"One Day, I'm Gonna Make You Watch This Over And Over Again",
+  'Go On Then, Say Thank You Out Loud 20 Times Now For Me',
+  'Oh Fuck It, Send Me On WhatsApp, Do It Now Fag',"He's A Good Boy, And His Ass Tastes Fucking Great",
+  "I've Got A Surprise For You Next Time I See You, And It's Fucking Horrendous",
+  "Don't Mention You've Seen This","You're Gonna Hate To Love It",
+  'Good Boy. Now Thank Me Properly','Mine. Every Inch Of You',"Filthy Little Thing, Aren't You",
+  'I Own That Face And That Hole','Beg Me For The Next One','You Did That For Me. Remember It',
+  'Disgusting. Do It Again Tomorrow','Such An Obedient Little Pet',"That's Going In My Collection",
+  'Kneel And Thank Me When You Read This','Good Pet. Sit. Wait For Me',
+  "You're Blushing, Aren't You, Boy",'Pathetic And Perfect. My Favourite',
+  'Send Me Three More Just Like It','That Was Almost Good Enough. Almost'
+];
+function randomPraise(){ const a=PRAISE_MESSAGES; return a[Math.floor(Math.random()*a.length)]; }
 /* Structured questions every request must answer */
 const REQUEST_QUESTIONS = [
   ['who','Who will you be with?'],
@@ -246,6 +267,8 @@ function normalizeState(){
   state.memories=ensureArray(state.memories);
   state.suggestions=ensureArray(state.suggestions);
   if(typeof state.suggestionBoxOpen!=='boolean') state.suggestionBoxOpen=false;
+  if(typeof state.requestBoxOpen!=='boolean') state.requestBoxOpen=true;
+  state.redactedRecords=ensureArray(state.redactedRecords);
   if(typeof state.hideHardLimits!=='boolean'){ state.hideHardLimits=false; }
   state.appSettings={reduceMotion:false,starSpending:true,...(state.appSettings||{})};
   if(typeof state.appSettings.starSpending!=='boolean'){ state.appSettings.starSpending=true; changed=true; }
@@ -461,17 +484,32 @@ function updateHeader(){
   const isDom=state.currentRole==='dom';
   const nameEl=document.getElementById('header-name'); if(nameEl) nameEl.textContent=isDom?state.domTitle:state.subTitle;
   const roleEl=document.getElementById('header-role'); if(roleEl){ roleEl.textContent=isDom?'Dominant':'Owned by James'; roleEl.style.color=isDom?'var(--red)':'var(--sage)'; }
-  const avatar=document.getElementById('header-avatar'); if(avatar) avatar.src=isDom?((state.domProfile&&state.domProfile.photo)||state.avatar||DEFAULT_PHOTO):(state.subProfile&&state.subProfile.photo?state.subProfile.photo:DEFAULT_PHOTO);
-  /* Replace right-side header buttons. Jacob's menu opens HIS profile only;
-     only James reaches Settings. */
+  /* Avatar opens the relevant profile (Jacob taps his picture; James taps his). */
+  const avatar=document.getElementById('header-avatar');
+  if(avatar){ avatar.src=isDom?((state.domProfile&&state.domProfile.photo)||state.avatar||DEFAULT_PHOTO):(state.subProfile&&state.subProfile.photo?state.subProfile.photo:DEFAULT_PHOTO); avatar.style.cursor='pointer'; avatar.onclick=()=>{ isDom?showDomProfileModal():showProfileModal(); }; }
+  /* Right side: cycling countdown chip + bell. Only James gets the Settings menu. */
   const btns=document.querySelector('.app-header .flex.items-center.gap-x-2:last-child')||document.getElementById('header-action')?.parentElement;
   if(btns){
     const unread=unreadNotifications().length;
     const menuBtn=isDom
       ? `<button onclick="showSettings()" title="Settings" style="width:2.5rem;height:2.5rem;display:flex;align-items:center;justify-content:center;border-radius:1rem;background:rgba(255,255,255,.05);color:var(--ivory)" class="tap"><i class="fa-solid fa-bars"></i></button>`
-      : `<button onclick="showProfileModal()" title="My profile" style="width:2.5rem;height:2.5rem;display:flex;align-items:center;justify-content:center;border-radius:1rem;background:rgba(255,255,255,.05);color:var(--ivory)" class="tap"><i class="fa-solid fa-user"></i></button>`;
-    btns.innerHTML=`<span class="pill px-3 py-2 text-[10px] hide-tiny" style="display:inline-flex;align-items:center;gap:.3rem"><span style="width:.5rem;height:.5rem;border-radius:999px;background:var(--sage);display:inline-block"></span>Connected</span><button onclick="navigateToTab('notifications')" style="position:relative;width:2.5rem;height:2.5rem;display:flex;align-items:center;justify-content:center;border-radius:1rem;background:rgba(255,255,255,.05);color:var(--gold)" class="tap"><i class="fa-solid fa-bell"></i>${unread?`<span style="position:absolute;top:-.25rem;right:-.25rem;min-width:1.2rem;height:1.2rem;padding:0 .2rem;border-radius:999px;background:var(--red);color:#fff;font-size:.6rem;display:flex;align-items:center;justify-content:center">${unread}</span>`:''}</button>${menuBtn}`;
+      : '';
+    btns.innerHTML=`<button id="hdr-timer" onclick="openHeaderTimer()" class="tap" style="display:none;align-items:center;gap:.4rem;height:2.5rem;padding:0 .7rem;border-radius:999px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1)"></button><button onclick="navigateToTab('notifications')" style="position:relative;width:2.5rem;height:2.5rem;display:flex;align-items:center;justify-content:center;border-radius:1rem;background:rgba(255,255,255,.05);color:var(--gold)" class="tap"><i class="fa-solid fa-bell"></i>${unread?`<span style="position:absolute;top:-.25rem;right:-.25rem;min-width:1.2rem;height:1.2rem;padding:0 .2rem;border-radius:999px;background:var(--red);color:#fff;font-size:.6rem;display:flex;align-items:center;justify-content:center">${unread}</span>`:''}</button>${menuBtn}`;
+    updateHeaderTimer();
   }
+}
+var _hdrTimerIdx=0;
+function openHeaderTimer(){ const items=timedItems(); if(!items.length)return; const it=items[_hdrTimerIdx%items.length]; openTimedItem(it.kind,it.refId); }
+function updateHeaderTimer(){
+  const el=document.getElementById('hdr-timer'); if(!el)return;
+  const items=timedItems();
+  if(!items.length){ el.style.display='none'; return; }
+  _hdrTimerIdx=_hdrTimerIdx%items.length;
+  const it=items[_hdrTimerIdx]; const tl=getTimeLeft(it.item); const over=tl.text==='Overdue';
+  const mins=(dueDateFor(it.item)-Date.now())/60000;
+  const col=over?'var(--red)':(mins<=15?'#e0852f':it.kind==='punishment'?'var(--red)':'var(--blue)');
+  el.style.display='inline-flex';
+  el.innerHTML=`<span class="mini-ring" style="--p:${tl.pct};--c:${col}"><i class="fa-solid ${it.kind==='punishment'?'fa-hourglass-half':'fa-clock'}"></i></span><span class="countdown" style="font-size:.7rem;font-variant-numeric:tabular-nums;color:${over?'#fca5a5':'var(--ivory)'}">${tl.text}</span>${items.length>1?`<span style="font-size:.55rem;color:var(--stone)">${(_hdrTimerIdx+1)}/${items.length}</span>`:''}`;
 }
 function updateRoleUI(){
   if(!state)return;
@@ -540,22 +578,8 @@ function timedItems(){
   ensureArray(state.punishments).filter(p=>p.status==='active'&&p.kind==='timed'&&dueDateFor(p)).forEach(p=>out.push({refId:p.id,kind:'punishment',title:titleCase(p.title),item:p}));
   return out.sort((a,b)=>dueDateFor(a.item)-dueDateFor(b.item));
 }
-function renderTimerStrip(){
-  const main=document.getElementById('main-app');
-  let strip=document.getElementById('timer-strip');
-  const visible=main&&main.style.display!=='none'&&!(state.appLock&&state.appLock.locked&&state.currentRole==='sub');
-  const items=visible?timedItems():[];
-  if(!items.length){ if(strip)strip.style.display='none'; return; }
-  if(!strip){ strip=document.createElement('div'); strip.id='timer-strip'; strip.className='seg-scroll'; document.body.appendChild(strip); }
-  const header=document.querySelector('.app-header'); const top=header?Math.round(header.getBoundingClientRect().bottom):56;
-  strip.style.cssText=`position:fixed;left:0;right:0;top:${top}px;z-index:45;display:flex;gap:.5rem;overflow-x:auto;padding:.4rem .9rem;background:rgba(7,7,7,.94);backdrop-filter:blur(14px);border-bottom:1px solid rgba(255,255,255,.08)`;
-  strip.innerHTML=items.map(it=>{ const tl=getTimeLeft(it.item); const over=tl.text==='Overdue'; const col=over?'var(--red)':it.kind==='punishment'?'var(--red)':'var(--blue)';
-    return `<button onclick="openTimedItem('${it.kind}',${it.refId})" class="tap" style="flex-shrink:0;display:flex;align-items:center;gap:.45rem;padding:.25rem .55rem;border-radius:999px;background:${over?'rgba(143,17,24,.25)':'rgba(255,255,255,.05)'};border:1px solid ${over?'var(--red)':'rgba(255,255,255,.1)'}">
-      <span class="mini-ring" style="--p:${tl.pct};--c:${col}"><i class="fa-solid ${it.kind==='punishment'?'fa-hourglass-half':'fa-clock'}"></i></span>
-      <span style="font-size:.62rem;color:var(--stone);max-width:4.5rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeText(it.title)}</span>
-      <span class="countdown" style="font-size:.66rem;font-variant-numeric:tabular-nums;color:${over?'#fca5a5':'var(--ivory)'}">${tl.text}</span>
-    </button>`; }).join('');
-}
+/* The countdown now lives in the top banner (updateHeaderTimer) — no overlapping strip. */
+function renderTimerStrip(){ const strip=document.getElementById('timer-strip'); if(strip)strip.remove(); updateHeaderTimer(); }
 function openTimedItem(kind,id){ if(kind==='task'){ const t=state.tasks.find(x=>String(x.id)===String(id)); if(t)showTaskDetail(t); } else { activeProtocolPanel='consequences'; navigateToTab('protocols'); } }
 const WARN_THRESHOLDS=[60,45,30,15,10,5,1];
 function tickTimers(){
@@ -567,8 +591,11 @@ function tickTimers(){
     if(mins<=0&&!t.overdueHandled){ t.overdueHandled=true; changed=true; handleOverdue(t); }
   });
   if(changed) saveState();
-  renderTimerStrip(); updateCountdowns(); enforceLock();
+  /* cycle the header countdown chip through active timers every ~3s */
+  _hdrTick=(_hdrTick||0)+1; if(_hdrTick%3===0) _hdrTimerIdx++;
+  updateHeaderTimer(); updateCountdowns(); enforceLock();
 }
+var _hdrTick=0;
 function handleOverdue(item){
   addNotification('review','Jacob is overdue','“'+titleCase(item.title)+'” passed its deadline.','tasks');
   state.appLock={locked:true,reason:'Awaiting judgement as a result of failure.',at:new Date().toISOString(),scope:'overdue'};
@@ -703,45 +730,42 @@ function showDomTools(){
     ['fa-clock-rotate-left','Send Memory','var(--rose)','showSendMemory()'],
     ['fa-photo-film','View Memories','var(--rose)','showMemoriesReview()'],
     ['fa-inbox','Requests','var(--gold)','showRequestsReview()'],
-    ['fa-lightbulb','Suggestion Box','var(--blue)','toggleSuggestionBox()'],
-    ['fa-clipboard-question','View Check-Ins','var(--sage)','showCheckInModal()']
+    ['fa-clipboard-question','View Check-Ins','var(--sage)','showCheckInModal()'],
+    ['fa-comment-dots','Suggestions','var(--blue)','showSuggestions()']
   ];
+  const sg=ensureArray(state.suggestions).filter(s=>!s.seen).length;
   const m=document.createElement('div');
-  m.innerHTML=`<div class="fixed inset-0 bg-black/90 z-[150] flex items-end md:items-center justify-center" onclick="this.remove()"><div onclick="event.stopImmediatePropagation()" class="glass" style="width:100%;max-width:30rem;border-radius:2rem 2rem 0 0;padding:1.5rem;padding-bottom:max(1.5rem,env(safe-area-inset-bottom))">
-    <div style="font-size:1.3rem;font-weight:600;margin-bottom:1.25rem">James's Tools</div>
+  m.innerHTML=`<div class="fixed inset-0 bg-black/90 z-[150] flex items-end md:items-center justify-center" onclick="this.remove()"><div onclick="event.stopImmediatePropagation()" class="glass" style="width:100%;max-width:30rem;max-height:92vh;overflow:auto;border-radius:2rem 2rem 0 0;padding:1.5rem;padding-bottom:max(1.5rem,env(safe-area-inset-bottom))">
+    <div style="font-size:1.3rem;font-weight:600;margin-bottom:1rem">James's Tools</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem">
-      ${tools.map(([ic,label,col,fn])=>`<button onclick="this.closest('.fixed').remove();${fn}" class="tap subtle-card" style="padding:1rem;text-align:left"><i class="fa-solid ${ic}" style="color:${col};font-size:1.2rem"></i><div style="font-weight:600;margin-top:.5rem;font-size:.85rem">${label}</div></button>`).join('')}
+      ${tools.map(([ic,label,col,fn])=>`<button onclick="this.closest('.fixed').remove();${fn}" class="tap subtle-card" style="padding:1rem;text-align:left;position:relative"><i class="fa-solid ${ic}" style="color:${col};font-size:1.2rem"></i><div style="font-weight:600;margin-top:.5rem;font-size:.85rem">${label}</div>${label==='Suggestions'&&sg?`<span style="position:absolute;top:.6rem;right:.6rem;min-width:1.2rem;height:1.2rem;border-radius:999px;background:var(--red);color:#fff;font-size:.6rem;display:flex;align-items:center;justify-content:center">${sg}</span>`:''}</button>`).join('')}
     </div>
-    <div style="font-size:.7rem;color:var(--stone);margin-top:1rem">Suggestion box is ${state.suggestionBoxOpen?'<span style="color:var(--sage)">open</span>':'closed'}.${ensureArray(state.suggestions).filter(s=>!s.seen).length?` ${ensureArray(state.suggestions).filter(s=>!s.seen).length} new suggestion(s).`:''}</div>
-    ${ensureArray(state.suggestions).length?`<button onclick="this.closest('.fixed').remove();showSuggestions()" class="tap" style="width:100%;margin-top:.6rem;padding:.7rem;background:rgba(255,255,255,.05);border-radius:1rem;font-size:.82rem">View Jacob's suggestions (${state.suggestions.length})</button>`:''}
+    <div style="font-size:.65rem;letter-spacing:2px;color:var(--stone);margin:1.25rem 0 .6rem">WHAT JACOB CAN DO</div>
+    <div class="tap" onclick="toggleRequestBox();this.querySelector('.switch').classList.toggle('on')" style="display:flex;justify-content:space-between;align-items:center;padding:.85rem 1rem;background:rgba(255,255,255,.05);border-radius:1rem;cursor:pointer;margin-bottom:.5rem">
+      <div><div style="font-weight:600;font-size:.9rem">Request box</div><div style="font-size:.72rem;color:var(--stone)">Let Jacob ask for things out of routine</div></div>
+      <span class="switch${state.requestBoxOpen?' on':''}"><span class="knob"></span></span>
+    </div>
+    <div class="tap" onclick="toggleSuggestionBox();this.querySelector('.switch').classList.toggle('on')" style="display:flex;justify-content:space-between;align-items:center;padding:.85rem 1rem;background:rgba(255,255,255,.05);border-radius:1rem;cursor:pointer">
+      <div><div style="font-weight:600;font-size:.9rem">Suggestion box</div><div style="font-size:.72rem;color:var(--stone)">Let Jacob suggest his own consequences</div></div>
+      <span class="switch${state.suggestionBoxOpen?' on':''}"><span class="knob"></span></span>
+    </div>
   </div></div>`;
   document.getElementById('modal-container').appendChild(m);
 }
-/* ── Jacob's active cards ── */
+function toggleRequestBox(){ if(state.currentRole!=='dom')return; state.requestBoxOpen=!state.requestBoxOpen; saveState(); showToast('Request box '+(state.requestBoxOpen?'opened':'closed'),'success'); }
+/* ── Jacob's active items — compact chips, not big cards ── */
 function subActiveCards(){
-  let html='';
-  /* active check-in (Dom-sent, 10-min window) */
-  if(state.activeCheckIn&&!state.activeCheckIn.done){
-    const left=getTimeLeft({dueAt:state.activeCheckIn.dueAt});
-    html+=`<button onclick="showCheckInModal()" class="tap card" style="display:flex;align-items:center;gap:.85rem;width:100%;text-align:left;padding:1rem 1.15rem;margin-bottom:.75rem;border-left:3px solid var(--blue)"><span style="width:2.6rem;height:2.6rem;border-radius:1rem;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:rgba(49,91,122,.3);color:var(--blue)"><i class="fa-solid fa-sliders"></i></span><span style="flex:1"><span style="font-weight:600;display:block">Check-In from James</span><span style="font-size:.75rem;color:${left.text==='Overdue'?'var(--red)':'var(--stone)'}">Fill it in — ${left.text} left</span></span><i class="fa-solid fa-chevron-right" style="color:rgba(198,166,66,.4)"></i></button>`;
-  }
-  /* active helpers */
-  ensureArray(state.helpers).filter(h=>h.active).forEach(h=>{
-    const def=HELPER_TYPES.find(t=>t[0]===h.type)||['','Helper','fa-hands-holding-circle','#888'];
-    html+=`<button onclick="viewHelper('${h.id}')" class="tap card" style="display:flex;align-items:center;gap:.85rem;width:100%;text-align:left;padding:1rem 1.15rem;margin-bottom:.75rem;border-left:3px solid ${def[3]}"><span style="width:2.6rem;height:2.6rem;border-radius:1rem;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:${def[3]}33;color:${def[3]}"><i class="fa-solid ${def[2]}"></i></span><span style="flex:1"><span style="font-weight:600;display:block">${def[1]} — from James</span><span style="font-size:.75rem;color:var(--stone)">${escapeText(h.note||'Tap to read')}</span></span><i class="fa-solid fa-chevron-right" style="color:rgba(198,166,66,.4)"></i></button>`;
-  });
-  /* unviewed/active memories */
-  ensureArray(state.memories).filter(mm=>!mm.reflectionDone).forEach(mm=>{
-    html+=`<button onclick="viewMemory('${mm.id}')" class="tap card" style="display:flex;align-items:center;gap:.85rem;width:100%;text-align:left;padding:1rem 1.15rem;margin-bottom:.75rem;border-left:3px solid var(--rose)"><span style="width:2.6rem;height:2.6rem;border-radius:1rem;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:rgba(217,124,138,.25);color:var(--rose)"><i class="fa-solid fa-clock-rotate-left"></i></span><span style="flex:1"><span style="font-weight:600;display:block">Memory from James</span><span style="font-size:.75rem;color:var(--stone)">${mm.viewed?'Now reflect on it':'You must view this'}</span></span><i class="fa-solid fa-chevron-right" style="color:rgba(198,166,66,.4)"></i></button>`;
-  });
-  /* suggestion box open */
-  if(state.suggestionBoxOpen){
-    html+=`<button onclick="showSuggestPunishment()" class="tap card" style="display:flex;align-items:center;gap:.85rem;width:100%;text-align:left;padding:1rem 1.15rem;margin-bottom:.75rem;border-left:3px solid var(--gold)"><span style="width:2.6rem;height:2.6rem;border-radius:1rem;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:rgba(198,166,66,.2);color:var(--gold)"><i class="fa-solid fa-lightbulb"></i></span><span style="flex:1"><span style="font-weight:600;display:block">Suggest a consequence</span><span style="font-size:.75rem;color:var(--stone)">Only taken into consideration by James</span></span><i class="fa-solid fa-chevron-right" style="color:rgba(198,166,66,.4)"></i></button>`;
-  }
-  /* make a request — always available */
-  html+=`<button onclick="showMakeRequest()" class="tap card" style="display:flex;align-items:center;gap:.85rem;width:100%;text-align:left;padding:1rem 1.15rem;margin-bottom:1.25rem;border-left:3px solid var(--gold)"><span style="width:2.6rem;height:2.6rem;border-radius:1rem;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:rgba(198,166,66,.2);color:var(--gold)"><i class="fa-solid fa-hand"></i></span><span style="flex:1"><span style="font-weight:600;display:block">Make a request</span><span style="font-size:.75rem;color:var(--stone)">Ask James for something out of routine</span></span><i class="fa-solid fa-chevron-right" style="color:rgba(198,166,66,.4)"></i></button>`;
-  if(!html) return '';
-  return `<div style="margin-bottom:.5rem">${html}</div>`;
+  const chips=[];
+  if(state.activeCheckIn&&!state.activeCheckIn.done){ const left=getTimeLeft({dueAt:state.activeCheckIn.dueAt}); chips.push(_chip('fa-sliders','var(--blue)','Check-In','showCheckInModal()',left.text==='Overdue'?'now':left.text)); }
+  ensureArray(state.helpers).filter(h=>h.active).forEach(h=>{ const def=HELPER_TYPES.find(t=>t[0]===h.type)||['','Helper','fa-hands-holding-circle','#888']; chips.push(_chip(def[2],def[3],def[1],`viewHelper('${h.id}')`)); });
+  ensureArray(state.memories).filter(mm=>!mm.reflectionDone).forEach(mm=>{ chips.push(_chip('fa-clock-rotate-left','var(--rose)','Memory',`viewMemory('${mm.id}')`,mm.viewed?'reflect':'view')); });
+  if(state.suggestionBoxOpen) chips.push(_chip('fa-lightbulb','var(--gold)','Suggest','showSuggestPunishment()'));
+  if(state.requestBoxOpen) chips.push(_chip('fa-hand','var(--gold)','Request','showMakeRequest()'));
+  if(!chips.length) return '';
+  return `<div class="seg-scroll" style="display:flex;gap:.5rem;overflow-x:auto;margin-bottom:1.1rem;padding-bottom:.3rem">${chips.join('')}</div>`;
+}
+function _chip(icon,col,label,fn,badge){
+  return `<button onclick="${fn}" class="tap" style="flex-shrink:0;display:inline-flex;align-items:center;gap:.45rem;padding:.5rem .85rem;border-radius:999px;background:${col}1f;border:1px solid ${col}55"><i class="fa-solid ${icon}" style="color:${col};font-size:.85rem"></i><span style="font-size:.78rem;font-weight:600;color:var(--ivory)">${label}</span>${badge?`<span style="font-size:.62rem;color:${col};font-variant-numeric:tabular-nums">${escapeText(badge)}</span>`:''}</button>`;
 }
 /* ── Dynamic check-in: James sends, Jacob has 10 minutes ── */
 function sendCheckIn(){
@@ -1139,27 +1163,72 @@ function autoCountdown(kind,secs){
 }
 function doAutoRecord(kind,secs){
   if(!_cap.stream){ return; }
+  const reqs=_cap.reqs||{}; const surprise=(kind==='video'&&reqs.video&&reqs.video.surprise&&reqs.video.surprise.extraSeconds>0)?reqs.video.surprise:null;
   const timer=document.getElementById('cap-timer'), hint=document.getElementById('cap-hint'), flash=document.getElementById('cap-flash');
   const mime=_pickMime(kind==='video'?'video':'audio');
   _cap.chunks=[]; _cap.recorder=mime?new MediaRecorder(_cap.stream,{mimeType:mime}):new MediaRecorder(_cap.stream);
   _cap.recorder.ondataavailable=e=>{ if(e.data.size) _cap.chunks.push(e.data); };
-  _cap.recorder.onstop=()=>{ const mt=_cap.recorder.mimeType||mime||(kind==='video'?'video/mp4':'audio/mp4'); const blob=new Blob(_cap.chunks,{type:mt}); const item={blob,mime:mt,ext:_ext(mt)}; if(kind==='video')_pend.video=[item]; else _pend.voice=[item]; endAutoRecord(); };
-  _cap.recorder.start(); let left=secs; if(timer)timer.textContent=left+'s'; if(hint)hint.innerHTML='<i class="fa-solid fa-circle" style="color:var(--red);margin-right:.4rem;animation:pulseZone 1s infinite"></i>Recording — hold still.';
-  _cap.timer=setInterval(()=>{ left--; if(timer)timer.textContent=Math.max(0,left)+'s'; if(left<=3&&left>0&&flash)flash.classList.add('cap-flash-on'); if(left<=0){ clearInterval(_cap.timer); _cap.timer=null; try{_cap.recorder.stop();}catch(_){} } },1000);
+  _cap.recorder.onstop=()=>{ const mt=_cap.recorder.mimeType||mime||(kind==='video'?'video/mp4':'audio/mp4'); const blob=new Blob(_cap.chunks,{type:mt}); const item={blob,mime:mt,ext:_ext(mt)}; if(kind==='video')_pend.video=[item]; else _pend.voice=[item]; endAutoRecord(kind); };
+  _cap.recorder.start(); let left=secs; let surprised=false; if(timer)timer.textContent=left+'s'; if(hint)hint.innerHTML='<i class="fa-solid fa-circle" style="color:var(--red);margin-right:.4rem;animation:pulseZone 1s infinite"></i>Recording — hold still.';
+  _cap.timer=setInterval(()=>{
+    left--; if(timer)timer.textContent=Math.max(0,left)+'s';
+    if(left<=3&&left>0&&flash)flash.classList.add('cap-flash-on');
+    if(left<=0){
+      if(surprise&&!surprised){
+        /* SEAMLESS fake-out: keep recording, flash blue, extend */
+        surprised=true; if(flash){ flash.classList.remove('cap-flash-on'); flash.classList.add('cap-flash-blue'); setTimeout(()=>flash.classList.remove('cap-flash-blue'),1400); }
+        const sm=document.getElementById('cap-message'); if(sm){ sm.style.display=''; sm.innerHTML=`<div class="cap-surprise">${escapeText(surprise.message||'Surprise. More.')}</div>`; setTimeout(()=>{ if(sm)sm.style.display='none'; },1800); }
+        left=surprise.extraSeconds; if(timer)timer.textContent=left+'s';
+      } else {
+        clearInterval(_cap.timer); _cap.timer=null; try{_cap.recorder.stop();}catch(_){}
+      }
+    }
+  },1000);
 }
-function endAutoRecord(){
+function endAutoRecord(kind){
   _stopStream();
-  const flash=document.getElementById('cap-flash'); if(flash)flash.classList.remove('cap-flash-on');
+  const flash=document.getElementById('cap-flash'); if(flash){ flash.classList.remove('cap-flash-on'); flash.classList.add('cap-flash-on'); setTimeout(()=>flash&&flash.classList.remove('cap-flash-on'),700); }
   const v=document.getElementById('cap-video'); if(v)v.style.display='none';
   const w=document.getElementById('cap-voicewrap'); if(w)w.style.display='none';
   const timer=document.getElementById('cap-timer'); if(timer)timer.textContent='';
   const hint=document.getElementById('cap-hint'); if(hint)hint.textContent='';
-  const msg=document.getElementById('cap-message'); if(msg){ msg.style.display=''; msg.innerHTML='<div class="cap-thanks">Thank you, Sir.</div>'; }
-  setTimeout(()=>{ finishCapture(); },2000);
+  const msg=document.getElementById('cap-message'); if(msg){ msg.style.display=''; msg.innerHTML=`<div class="cap-thanks">Thank you, Sir.</div><div class="cap-praise">${escapeText(randomPraise())}</div>`; }
+  setTimeout(()=>{ finishCapture(true); },2600);
 }
 function _stopStream(){ if(_cap.stream){ _cap.stream.getTracks().forEach(t=>t.stop()); _cap.stream=null; } if(_cap.timer){ clearInterval(_cap.timer); _cap.timer=null; } }
 function cancelCapture(){ try{ if(_cap.recorder&&_cap.recorder.state==='recording') _cap.recorder.stop(); }catch(_){} _stopStream(); _cap.recorder=null; const m=document.getElementById('capture-modal'); if(m)m.remove(); }
-function finishCapture(){ _stopStream(); _cap.recorder=null; const m=document.getElementById('capture-modal'); if(m)m.remove(); refreshEvidenceCounts(); }
+function finishCapture(autoFromRecord){
+  _stopStream(); _cap.recorder=null; const m=document.getElementById('capture-modal'); if(m)m.remove();
+  refreshEvidenceCounts();
+  /* one chance: if a media-only task is fully captured, submit automatically */
+  if(autoFromRecord&&_pend){
+    const task=state.tasks.find(t=>String(t.id)===String(_pend.taskId)); const req=ensureArray(task&&task.requiredEvidence);
+    const noText=!req.includes('text');
+    const photoOk=!req.includes('photo')||_pend.photo.length>=((taskReqs(task).photo&&taskReqs(task).photo.min)||1);
+    const videoOk=!req.includes('video')||_pend.video.length;
+    const voiceOk=!req.includes('voice')||_pend.voice.length;
+    if(noText&&photoOk&&videoOk&&voiceOk){ document.querySelectorAll('.fixed').forEach(x=>x.remove()); autoSubmitEvidence(_pend.taskId); }
+  }
+}
+/* Upload captured media + complete the task without a Submit button (one-chance flow) */
+async function autoSubmitEvidence(taskId){
+  const task=state.tasks.find(t=>String(t.id)===String(taskId)); if(!task||!_pend)return;
+  const uploads=[];
+  _pend.photo.forEach((p,i)=>uploads.push({type:'photo',blob:p.blob,mime:p.mime||'image/jpeg',name:'photo-'+(i+1)+'.'+(p.ext||'jpg')}));
+  _pend.video.forEach((p)=>uploads.push({type:'video',blob:p.blob,mime:p.mime||p.blob.type||'video/mp4',name:'video.'+(p.ext||'mp4')}));
+  _pend.voice.forEach((p)=>uploads.push({type:'voice',blob:p.blob,mime:p.mime||p.blob.type||'audio/mp4',name:'voice.'+(p.ext||'m4a')}));
+  const items=[]; showToast('Sending to James…','info');
+  try{
+    for(const u of uploads){
+      const ref=evidenceStorage.ref('evidence/'+taskId+'/'+Date.now()+'-'+u.name);
+      const file=new File([u.blob],u.name,{type:u.mime});
+      const url=await uploadEvidenceFile(ref,file,{textContent:'',disabled:false});
+      items.push({type:u.type,name:u.name,url,mime:u.mime,size:u.blob.size});
+    }
+    task.evidence=items; state.evidence.unshift({id:Date.now(),taskId,title:task.title,date:new Date().toISOString(),items});
+    _pend=null; await completeTask(taskId); showToast("That's it. Sent.",'success');
+  }catch(err){ console.error(err); showToast('Send failed — check connection','error'); }
+}
 function refreshEvidenceCounts(){
   if(!_pend)return;
   const task=state.tasks.find(t=>String(t.id)===String(_pend.taskId)); const reqs=taskReqs(task);
@@ -1259,7 +1328,7 @@ function approveTask(id,btn){ const t=state.tasks.find(x=>String(x.id)===String(
 function redoTask(id){ const t=state.tasks.find(x=>String(x.id)===String(id)); if(!t)return; const reason=prompt('Why is this being sent back? (optional)')||''; t.status='pending'; t.attempt=(t.attempt||1)+1; t.redoReason=reason.trim(); t.evidence=[]; t.reviewed=false; t.approved=false; addNotification('redo','James sent this back as a redo',titleCase(t.title),'tasks'); saveState(); document.querySelectorAll('.fixed').forEach(x=>x.remove()); renderTasks(); renderDashboard(); showToast('Sent back for redo','success'); }
 function deductStarsFor(id){ const t=state.tasks.find(x=>String(x.id)===String(id)); const amt=parseInt(prompt('How many stars to deduct?','2')||'0',10); if(!amt||amt<=0)return; state.stars=Math.max(0,(state.stars||0)-amt); state.starLog.unshift({id:Date.now(),date:new Date().toISOString().slice(0,10),reason:'Deducted by James: '+(t?titleCase(t.title):'task'),amount:-amt}); addNotification('consequence','James deducted stars','−'+amt+' stars','stars'); saveState(); renderRewards&&renderRewards(); updateHeader(); showToast('−'+amt+' stars','success'); }
 function requestReflectionFor(id){ const t=state.tasks.find(x=>String(x.id)===String(id)); if(!t)return; const refl={id:Date.now(),title:'Reflection: '+titleCase(t.title),desc:'Reflect on why this happened and what you will do better.',due:new Date(Date.now()+86400000).toISOString().slice(0,10),dueAt:new Date(Date.now()+86400000).toISOString(),category:'Reflective log',status:'pending',priority:1,requiredEvidence:['text'],evidenceReqs:{text:{minWords:40}},assignedAt:new Date().toISOString(),evidence:[],attempt:1}; state.tasks.unshift(refl); addNotification('task','James requested a reflection',refl.title,'tasks'); saveState(); document.querySelectorAll('.fixed').forEach(x=>x.remove()); renderTasks(); showToast('Reflection requested','success'); }
-function addConsequenceFor(id){ const t=state.tasks.find(x=>String(x.id)===String(id)); const title=prompt('Consequence title:', t?('Consequence: '+titleCase(t.title)):'Consequence'); if(!title)return; state.punishments.unshift({id:Date.now(),title:titleCase(title),desc:'',kind:'timed',due:new Date(Date.now()+86400000).toISOString().slice(0,10),dueAt:new Date(Date.now()+86400000).toISOString(),status:'active',assignedAt:new Date().toISOString()}); addNotification('consequence','James added a consequence',titleCase(title),'protocols'); saveState(); document.querySelectorAll('.fixed').forEach(x=>x.remove()); showToast('Consequence added','success'); }
+function addConsequenceFor(id){ const t=state.tasks.find(x=>String(x.id)===String(id)); const title=prompt('Consequence title:', t?('Consequence: '+titleCase(t.title)):'Consequence'); if(!title)return; const reason=prompt('Why? (Jacob will see this explanation)')||''; state.punishments.unshift({id:Date.now(),title:titleCase(title),desc:'',reason:reason.trim(),source:t?('From reviewing the task “'+titleCase(t.title)+'”'):'Added directly by James',kind:'timed',due:new Date(Date.now()+86400000).toISOString().slice(0,10),dueAt:new Date(Date.now()+86400000).toISOString(),status:'active',assignedAt:new Date().toISOString()}); addNotification('consequence','James added a consequence',titleCase(title),'protocols'); saveState(); document.querySelectorAll('.fixed').forEach(x=>x.remove()); showToast('Consequence added','success'); }
 function downloadEvidence(id){ const t=state.tasks.find(x=>String(x.id)===String(id)); if(!t)return; ensureArray(t.evidence).filter(e=>e.url).forEach(e=>{ const a=document.createElement('a'); a.href=e.url; a.target='_blank'; a.rel='noopener'; a.download=e.name||e.type; a.click(); }); showToast('Opening evidence…','info'); }
 function revokeTask(id,btn){ if(!confirm('Revoke this task silently? Jacob is not notified.'))return; state.tasks=state.tasks.filter(x=>String(x.id)!==String(id)); saveState(); btn.closest('.fixed').remove(); renderTasks(); renderDashboard(); /* deliberately no notification */ }
 function deleteTask(id,btn){ if(!confirm('Delete this task?'))return; state.tasks=state.tasks.filter(x=>String(x.id)!==String(id)); saveState(); btn.closest('.fixed').remove(); renderTasks(); renderDashboard(); }
@@ -1304,7 +1373,7 @@ function showAddTaskModal(){
       <select id="task-cat" class="beautiful-input" style="width:100%;padding:.85rem 1rem;border-radius:1rem"><option>Service</option><option>Chore</option><option>Personal</option><option>Reflective log</option><option>Consequence Task</option></select>
       <div><div style="font-size:.7rem;color:rgba(198,166,66,.7);margin-bottom:.5rem">REQUIRED PROOF — captured live, no uploads</div><div style="display:flex;flex-direction:column;gap:.55rem">
         ${proofRow('photo','Photo','fa-camera',`<label style="font-size:.62rem;color:var(--stone)">Minimum photos<input id="req-photo-min" type="number" min="1" value="1" class="beautiful-input" style="width:100%;padding:.55rem;border-radius:.6rem;margin-top:.15rem;display:block"></label>${_cameraPicker('photo')}`)}
-        ${proofRow('video','Video','fa-video',`<label style="font-size:.62rem;color:var(--stone)">Exact duration (seconds)<input id="req-video-sec" type="number" min="1" value="15" class="beautiful-input" style="width:100%;padding:.55rem;border-radius:.6rem;margin-top:.15rem;display:block"></label>${_cameraPicker('video')}`)}
+        ${proofRow('video','Video','fa-video',`<label style="font-size:.62rem;color:var(--stone)">Shown duration (seconds)<input id="req-video-sec" type="number" min="1" value="15" class="beautiful-input" style="width:100%;padding:.55rem;border-radius:.6rem;margin-top:.15rem;display:block"></label>${_cameraPicker('video')}<label style="display:flex;align-items:center;gap:.5rem;font-size:.7rem;margin-top:.6rem"><input type="checkbox" id="req-video-surprise" style="accent-color:var(--red)" onchange="document.getElementById('req-video-surprise-box').style.display=this.checked?'block':'none'">Surprise extension (fake-out)</label><div id="req-video-surprise-box" style="display:none;margin-top:.4rem;border-top:1px solid rgba(255,255,255,.08);padding-top:.5rem"><label style="font-size:.62rem;color:var(--stone)">Extra seconds added on the surprise<input id="req-video-extra" type="number" min="1" value="60" class="beautiful-input" style="width:100%;padding:.55rem;border-radius:.6rem;margin-top:.15rem;display:block"></label><input id="req-video-smsg" class="beautiful-input" style="width:100%;padding:.55rem;border-radius:.6rem;margin-top:.4rem;font-size:.8rem" placeholder="Surprise message (blue flash)" value="Surprise. You're not done."></div>`)}
         ${proofRow('voice','Voice Note','fa-microphone',`<label style="font-size:.62rem;color:var(--stone)">Minimum length (seconds)<input id="req-voice-sec" type="number" min="1" value="10" class="beautiful-input" style="width:100%;padding:.55rem;border-radius:.6rem;margin-top:.15rem;display:block"></label>`)}
         ${proofRow('text','Text Report','fa-pen',`<div style="display:grid;grid-template-columns:1fr 1fr;gap:.4rem"><label style="font-size:.62rem;color:var(--stone)">Min words<input id="req-text-min" type="number" min="0" value="0" class="beautiful-input" style="width:100%;padding:.55rem;border-radius:.6rem;margin-top:.15rem;display:block"></label><label style="font-size:.62rem;color:var(--stone)">Max words<input id="req-text-max" type="number" min="0" value="0" class="beautiful-input" style="width:100%;padding:.55rem;border-radius:.6rem;margin-top:.15rem;display:block"></label></div><label style="display:flex;align-items:center;gap:.5rem;font-size:.72rem;margin-top:.5rem"><input type="checkbox" id="req-text-spell" style="accent-color:var(--red)">Require spell-check</label>`)}
       </div></div>
@@ -1341,12 +1410,12 @@ function addNewTask(button){
   const numv=(id,d)=>{ const e=document.getElementById(id); const n=e?parseInt(e.value,10):NaN; return isNaN(n)?d:n; };
   const evidenceReqs={};
   if(required.includes('photo')) evidenceReqs.photo={min:Math.max(1,numv('req-photo-min',1)),camera:window._cam_photo||'environment'};
-  if(required.includes('video')) evidenceReqs.video={seconds:Math.max(1,numv('req-video-sec',15)),camera:window._cam_video||'environment'};
+  if(required.includes('video')){ evidenceReqs.video={seconds:Math.max(1,numv('req-video-sec',15)),camera:window._cam_video||'environment'}; if(document.getElementById('req-video-surprise')?.checked){ evidenceReqs.video.surprise={extraSeconds:Math.max(1,numv('req-video-extra',60)),message:(document.getElementById('req-video-smsg')?.value||'').trim()||"Surprise. You're not done."}; } }
   if(required.includes('voice')) evidenceReqs.voice={minSeconds:Math.max(1,numv('req-voice-sec',10))};
   if(required.includes('text')) evidenceReqs.text={minWords:Math.max(0,numv('req-text-min',0)),maxWords:Math.max(0,numv('req-text-max',0)),spellcheck:!!document.getElementById('req-text-spell')?.checked};
   const task={id:Date.now(),title,desc:document.getElementById('task-desc').value.trim(),due:date,dueAt,category:document.getElementById('task-cat').value,status:'pending',priority:2,requiredEvidence:required,evidenceReqs,attempt:1,assignedAt:new Date().toISOString(),evidence:[]};
   state.tasks.unshift(task);
-  if(task.category==='Consequence Task') state.punishments.unshift({id:Date.now()+1,title:task.title,desc:task.desc,kind:'task',linkedTaskId:task.id,status:'active',assignedAt:new Date().toISOString()});
+  if(task.category==='Consequence Task') state.punishments.unshift({id:Date.now()+1,title:task.title,desc:task.desc,reason:task.desc||'',source:'Assigned as a consequence task by James',kind:'task',linkedTaskId:task.id,status:'active',assignedAt:new Date().toISOString()});
   addNotification('task','Task assigned',task.title,'tasks'); saveState(); button.closest('.fixed').remove(); renderTasks(); renderDashboard(); showConfetti(20);
 }
 
@@ -1444,11 +1513,29 @@ function removeBodyZone(kind,view,indexInView){
 }
 function measurementRows(){ const m=state.subProfile.measurements; return [['Height',m.height],['Weight',m.weight],['Neck',m.neck],['Chest',m.chest],['Bicep L',m.bicepL],['Bicep R',m.bicepR],['Waist',m.waist],['Hips',m.hips],['Inside Leg',m.insideLeg]]; }
 function anatomyRows(){ const a=state.subProfile.anatomy; return [['Soft Length',a.softLength],['Hard Length',a.hardLength],['Soft Girth',a.softGirth],['Hard Girth',a.hardGirth],['Testicular Circumference',a.testicularCircumference]]; }
+function recordRedacted(key){ return ensureArray(state.redactedRecords).includes(key); }
+function toggleRedact(key){ if(state.currentRole!=='dom')return; const a=ensureArray(state.redactedRecords); const i=a.indexOf(key); if(i>=0)a.splice(i,1); else a.push(key); state.redactedRecords=a; saveState(); renderProtocols(); }
+function _redactBtn(key){ if(state.currentRole!=='dom')return ''; const on=recordRedacted(key); return `<button onclick="event.stopPropagation();toggleRedact('${key}')" class="pill tap" style="font-size:.62rem;padding:.28rem .7rem;${on?'color:var(--rose);border-color:rgba(217,124,138,.5)':'color:var(--stone)'}"><i class="fa-solid ${on?'fa-eye-slash':'fa-eye'}" style="margin-right:.25rem"></i>${on?'Hidden':'Visible'}</button>`; }
+function _redactWrap(key,bodyHtml){
+  if(state.currentRole==='dom'||!recordRedacted(key)) return bodyHtml;
+  return `<div class="redact-shimmer" style="border-radius:1rem;min-height:5rem;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.35);font-size:.8rem"><i class="fa-solid fa-lock" style="margin-right:.4rem"></i>Hidden by James</div>`;
+}
 function renderPersonalRecordsPanel(){
   const isDom=state.currentRole==='dom';
   const br=state.personalRecords.breath;
   const breathKeys={longestHold:'Longest Hold',rebreathe3L:'3 L Rebreathe',rebreathe5L:'5 L Rebreathe',rebreathe6L:'6 L Rebreathe',bubbleBottleLarge:'Bubble Bottle Large',bubbleBottleSmall:'Bubble Bottle Small',resistanceMaximum:'Resistance Maximum'};
-  return`<div style="display:flex;flex-direction:column;gap:1rem"><section class="card" style="padding:1.25rem"><div style="display:flex;gap:1rem"><img src="${escapeText(state.subProfile.photo||DEFAULT_PHOTO)}" style="width:7rem;height:8.5rem;object-fit:cover;border-radius:1.5rem;filter:grayscale(1)" alt="Sub profile"><div style="flex:1"><div class="heading-serif" style="font-size:1.75rem">${escapeText(state.subProfile.name||state.subTitle)}</div><div style="font-size:.8rem;color:var(--sage)">Submissive</div><div style="font-size:.8rem;color:var(--gold);margin-top:.5rem">Dominant: ${escapeText(state.subProfile.dominant||state.domTitle)}</div><span class="pill" style="display:inline-flex;align-items:center;gap:.35rem;font-size:.7rem;padding:.35rem .75rem;margin-top:.75rem"><i class="fa-solid fa-lock"></i>James edits</span></div></div></section><section class="card" style="padding:1.25rem"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem"><div style="font-size:1.2rem;font-weight:600">Measurements</div><span class="pill" style="font-size:.65rem;padding:.3rem .7rem;color:var(--blue)">Reference only</span></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">${measurementRows().map(([k,v])=>`<div class="subtle-card" style="padding:.75rem"><div style="font-size:.6rem;color:var(--stone);text-transform:uppercase;letter-spacing:1px">${k}</div><div style="font-size:.9rem;font-weight:600;margin-top:.25rem">${escapeText(v||'—')}</div></div>`).join('')}</div></section><section class="card" style="padding:1.25rem"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem"><div style="font-size:1.2rem;font-weight:600">Personal Records</div><span class="pill" style="font-size:.65rem;padding:.3rem .7rem;color:var(--blue)">Record keeping</span></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">${anatomyRows().map(([k,v])=>`<div class="subtle-card" style="padding:.75rem"><div style="font-size:.6rem;color:var(--stone);text-transform:uppercase;letter-spacing:1px">${k}</div><div style="font-size:.9rem;font-weight:600;margin-top:.25rem">${escapeText(v||'—')}</div></div>`).join('')}</div><div style="font-size:.75rem;color:var(--stone);margin-top:.85rem">For reference and record keeping only.</div></section><section class="card" style="padding:1.25rem"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem"><div style="font-size:1.2rem;font-weight:600">Breath Control Records</div>${isDom?`<button onclick="showEditBreathModal()" class="pill tap" style="font-size:.68rem;padding:.3rem .8rem">Edit</button>`:''}</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">${Object.entries(breathKeys).map(([k,label])=>`<div class="subtle-card" style="padding:.75rem"><div style="font-size:.6rem;color:var(--stone);text-transform:uppercase;letter-spacing:1px">${label}</div><div style="font-size:.9rem;font-weight:600;margin-top:.25rem">${escapeText(br[k]||'—')}</div></div>`).join('')}</div></section><section class="card" style="padding:1.25rem"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem"><div style="font-size:1.2rem;font-weight:600">Electro Response</div>${isDom?`<button onclick="showEditElectroModal()" class="pill tap" style="font-size:.68rem;padding:.3rem .8rem">Edit</button>`:''}</div><div style="display:flex;flex-direction:column;gap:.85rem">${Object.entries(state.personalRecords.electro).map(([label,row])=>rangeRow(label,row)).join('')}</div><div style="font-size:.75rem;color:var(--stone);margin-top:.85rem">Values use a 1 to 100 reference scale.</div></section></div>`;
+  const measureBody=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">${measurementRows().map(([k,v])=>`<div class="subtle-card" style="padding:.75rem"><div style="font-size:.6rem;color:var(--stone);text-transform:uppercase;letter-spacing:1px">${k}</div><div style="font-size:.9rem;font-weight:600;margin-top:.25rem">${escapeText(v||'—')}</div></div>`).join('')}</div>`;
+  const anatomyBody=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">${anatomyRows().map(([k,v])=>`<div class="subtle-card" style="padding:.75rem"><div style="font-size:.6rem;color:var(--stone);text-transform:uppercase;letter-spacing:1px">${k}</div><div style="font-size:.9rem;font-weight:600;margin-top:.25rem">${escapeText(v||'—')}</div></div>`).join('')}</div><div style="font-size:.75rem;color:var(--stone);margin-top:.85rem">For reference and record keeping only.</div>`;
+  const breathBody=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">${Object.entries(breathKeys).map(([k,label])=>`<div class="subtle-card" style="padding:.75rem"><div style="font-size:.6rem;color:var(--stone);text-transform:uppercase;letter-spacing:1px">${label}</div><div style="font-size:.9rem;font-weight:600;margin-top:.25rem">${escapeText(br[k]||'—')}</div></div>`).join('')}</div>`;
+  const electroBody=`<div style="display:flex;flex-direction:column;gap:.85rem">${Object.entries(state.personalRecords.electro).map(([label,row])=>rangeRow(label,row)).join('')}</div><div style="font-size:.75rem;color:var(--stone);margin-top:.85rem">Values use a 1 to 100 reference scale.</div>`;
+  const sec=(key,title,extra,body)=>`<section class="card" style="padding:1.25rem"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;gap:.5rem"><div style="font-size:1.2rem;font-weight:600">${title}</div><div style="display:flex;gap:.4rem;align-items:center">${extra}${_redactBtn(key)}</div></div>${_redactWrap(key,body)}</section>`;
+  return`<div style="display:flex;flex-direction:column;gap:1rem">
+    <section class="card" style="padding:1.25rem"><div style="display:flex;gap:1rem"><img src="${escapeText(state.subProfile.photo||DEFAULT_PHOTO)}" style="width:7rem;height:8.5rem;object-fit:cover;border-radius:1.5rem;filter:grayscale(1)" alt="Sub profile"><div style="flex:1"><div class="heading-serif" style="font-size:1.75rem">${escapeText(state.subProfile.name||state.subTitle)}</div><div style="font-size:.8rem;color:var(--sage)">Submissive</div><div style="font-size:.8rem;color:var(--gold);margin-top:.5rem">Dominant: ${escapeText(state.subProfile.dominant||state.domTitle)}</div><span class="pill" style="display:inline-flex;align-items:center;gap:.35rem;font-size:.7rem;padding:.35rem .75rem;margin-top:.75rem"><i class="fa-solid fa-lock"></i>James edits</span></div></div></section>
+    ${sec('measurements','Measurements','<span class="pill" style="font-size:.65rem;padding:.3rem .7rem;color:var(--blue)">Reference</span>',measureBody)}
+    ${sec('anatomy','Personal Records','<span class="pill" style="font-size:.65rem;padding:.3rem .7rem;color:var(--blue)">Record keeping</span>',anatomyBody)}
+    ${sec('breath','Breath Control',isDom?`<button onclick="showEditBreathModal()" class="pill tap" style="font-size:.68rem;padding:.3rem .8rem">Edit</button>`:'',breathBody)}
+    ${sec('electro','Electro Response',isDom?`<button onclick="showEditElectroModal()" class="pill tap" style="font-size:.68rem;padding:.3rem .8rem">Edit</button>`:'',electroBody)}
+  </div>`;
 }
 function rangeRow(label,row){
   const min=Number(row.min)||0,max=Number(row.max)||0,start=Number(row.pleasureStart)||min,end=Number(row.pleasureEnd)||max;
@@ -1478,10 +1565,27 @@ function saveElectro(button){
 function renderPunishments(){
   const activeEl=document.getElementById('punishments-active'),histEl=document.getElementById('punishments-history'); if(!activeEl)return;
   const items=activePunishments();
-  activeEl.innerHTML=items.map(p=>{ const time=getTimeLeft(p); return`<div class="card" style="padding:1.25rem;border-left:4px solid var(--red)"><div style="display:flex;gap:1rem"><div class="ring" style="width:6rem;height:6rem;display:flex;align-items:center;justify-content:center;flex-shrink:0;--p:${time.pct};--c:var(--red)"><span class="countdown" data-countdown="${p.id}" style="font-size:.7rem;text-align:center;padding:0 .5rem;position:relative;z-index:1">${time.text}</span></div><div><div style="font-weight:600;font-size:1.05rem">${escapeText(p.title)}</div><div style="font-size:.8rem;margin-top:.35rem;color:var(--stone)">${escapeText(p.desc||'')}</div><div style="font-size:.7rem;color:rgba(198,166,66,.7);margin-top:.75rem">${p.kind==='task'?'Linked task':'Active timer'}</div></div></div></div>`; }).join('')||`<div style="font-size:.85rem;color:rgba(198,166,66,.5)">No Active Consequences.</div>`;
-  if(histEl) histEl.innerHTML=state.punishments.filter(p=>p.status==='completed').map(p=>`<div class="glass" style="padding:.75rem 1rem;border-radius:1rem;display:flex;justify-content:space-between">${escapeText(p.title)}<span style="color:#34d399">Complete</span></div>`).join('')||`<div style="opacity:.5">No history yet.</div>`;
+  activeEl.innerHTML=items.map(p=>{ const time=getTimeLeft(p); return`<button onclick="showConsequenceDetail('${p.id}')" class="card tap" style="width:100%;text-align:left;padding:1.25rem;border-left:4px solid var(--red)"><div style="display:flex;gap:1rem"><div class="ring" style="width:6rem;height:6rem;display:flex;align-items:center;justify-content:center;flex-shrink:0;--p:${time.pct};--c:var(--red)"><span class="countdown" data-countdown="${p.id}" style="font-size:.7rem;text-align:center;padding:0 .5rem;position:relative;z-index:1">${time.text}</span></div><div style="flex:1"><div style="font-weight:600;font-size:1.05rem">${escapeText(p.title)}</div><div style="font-size:.8rem;margin-top:.35rem;color:var(--stone)">${escapeText(p.reason||p.desc||'Tap to see why.')}</div><div style="font-size:.68rem;color:rgba(198,166,66,.7);margin-top:.6rem"><i class="fa-solid fa-circle-info" style="margin-right:.3rem"></i>${escapeText(p.source||(p.kind==='task'?'Linked task':'Set by James'))}</div></div></div></button>`; }).join('')||`<div style="font-size:.85rem;color:rgba(198,166,66,.5)">No Active Consequences.</div>`;
+  if(histEl) histEl.innerHTML=state.punishments.filter(p=>p.status==='completed').map(p=>`<button onclick="showConsequenceDetail('${p.id}')" class="glass tap" style="width:100%;text-align:left;padding:.75rem 1rem;border-radius:1rem;display:flex;justify-content:space-between;align-items:center"><span>${escapeText(p.title)}</span><span style="color:#34d399;flex-shrink:0">Complete</span></button>`).join('')||`<div style="opacity:.5">No history yet.</div>`;
   updateCountdowns();
 }
+function showConsequenceDetail(id){
+  const p=ensureArray(state.punishments).find(x=>String(x.id)===String(id)); if(!p)return;
+  const time=getTimeLeft(p); const active=p.status==='active';
+  const linked=p.linkedTaskId?state.tasks.find(t=>String(t.id)===String(p.linkedTaskId)):null;
+  const isDom=state.currentRole==='dom';
+  const m=document.createElement('div');
+  m.innerHTML=`<div class="fixed inset-0 bg-black/90 z-[150] flex items-end md:items-center justify-center" onclick="this.remove()"><div onclick="event.stopImmediatePropagation()" class="glass" style="width:100%;max-width:28rem;border-radius:2rem 2rem 0 0;padding:1.5rem;padding-bottom:max(1.5rem,env(safe-area-inset-bottom))">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start"><div><div style="font-size:.65rem;letter-spacing:3px;color:var(--red)">CONSEQUENCE</div><div style="font-size:1.4rem;font-weight:600;margin-top:.2rem">${escapeText(p.title)}</div></div><button onclick="this.closest('.fixed').remove()" style="font-size:1.5rem;color:var(--stone)">×</button></div>
+    ${active?`<div class="ring" style="width:5rem;height:5rem;margin:1rem 0;display:flex;align-items:center;justify-content:center;--p:${time.pct};--c:var(--red)"><span class="countdown" data-countdown="${p.id}" style="font-size:.7rem;position:relative;z-index:1">${time.text}</span></div>`:`<div style="margin:.75rem 0;color:#34d399;font-size:.85rem"><i class="fa-solid fa-circle-check" style="margin-right:.3rem"></i>Completed</div>`}
+    <div style="margin-top:.5rem"><div style="font-size:.62rem;letter-spacing:2px;color:var(--gold)">WHY</div><div style="font-size:.9rem;margin-top:.25rem">${escapeText(p.reason||p.desc||'No reason recorded.')}</div></div>
+    <div style="margin-top:1rem"><div style="font-size:.62rem;letter-spacing:2px;color:var(--gold)">WHERE IT CAME FROM</div><div style="font-size:.9rem;margin-top:.25rem">${escapeText(p.source||(linked?('Linked to the task “'+titleCase(linked.title)+'”'):'Set directly by James'))}</div></div>
+    ${linked?`<button onclick="this.closest('.fixed').remove();showTaskDetailById(${linked.id})" class="tap" style="width:100%;margin-top:1.1rem;padding:.7rem;background:rgba(255,255,255,.06);border-radius:1rem;font-size:.82rem">Open the linked task</button>`:''}
+    ${isDom?`<button onclick="completeConsequence('${p.id}',this)" class="tap" style="width:100%;margin-top:.5rem;padding:.7rem;background:var(--sage-2);border-radius:1rem;color:#fff;font-size:.82rem">Mark completed / lift</button>`:''}
+  </div></div>`;
+  document.getElementById('modal-container').appendChild(m);
+}
+function completeConsequence(id,button){ const p=ensureArray(state.punishments).find(x=>String(x.id)===String(id)); if(p){ p.status='completed'; p.completedAt=new Date().toISOString(); saveState(); } button.closest('.fixed').remove(); renderProtocols(); }
 
 /* ── Rewards — animated stars, redeemable catalog, badge progress ── */
 function badgeProgress(id){
