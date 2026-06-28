@@ -6,7 +6,7 @@
 
 /* ── Version gate: forces one clean navigation when new build detected ── */
 (function(){
-  var BUILD='v5-20260628-05';
+  var BUILD='v5-20260628-07';
   try{
     if(localStorage.getItem('_sys_build')!==BUILD){
       try{localStorage.setItem('_sys_build',BUILD);}catch(_){}
@@ -74,6 +74,7 @@ function _syncState(){
   if(!state) return;
   const s=localStorage.getItem('the_system_v4');
   if(s){ try{ const p=JSON.parse(s); state={...state,...p}; }catch(_){} }
+  normalizeState();
 }
 
 /* ── Default data ── */
@@ -81,11 +82,12 @@ function defaultSystemState(role){
   role=role||'dom';
   const tomorrow=new Date(Date.now()+86400000).toISOString().slice(0,10);
   return {
-    dynamicName:'The System',domTitle:'Sir',subTitle:'James',currentRole:role,avatar:DEFAULT_PHOTO,
+    dynamicName:'The System',domTitle:'James',subTitle:'Jacob',currentRole:role,avatar:DEFAULT_PHOTO,
     stars:8,starLog:[{id:1,date:new Date().toISOString(),reason:'Initial system setup',amount:8}],
+    rewardsCatalog:defaultRewardsCatalog(),domProfile:defaultDomProfile(),
     tasks:[{id:101,title:'Morning Meditation + Gratitude',desc:"10 minutes + write 3 things you're grateful for",due:tomorrow,dueAt:tomorrow+'T23:59:00',status:'pending',priority:2,requiredEvidence:['text'],assignedAt:new Date().toISOString(),evidence:[]}],
     punishments:[{id:201,title:'TikTok Ban',desc:'Restricted app access until the timer completes.',kind:'timed',due:tomorrow,dueAt:tomorrow+'T23:59:00',status:'active',assignedAt:new Date().toISOString()}],
-    journal:[],evidence:[],activityLog:[{id:1,type:'dom',message:'Welcome to The System. Your first task is waiting.',time:'now'}],
+    journal:[],journalTags:['reflection','obedience','gratitude','discipline'],evidence:[],activityLog:[{id:1,type:'dom',message:'Welcome to The System. Your first task is waiting.',time:'now'}],
     limits:{hard:['Chems'],supplements:['Public protocol'],tries:['Timed focus'],likes:['Praise','Clear instructions'],loves:['Calm voice','Aftercare']},
     rules:{
       arrivalProcedure:'1. Text when 10 minutes away.\n2. Remove shoes at the door.\n3. Wait in the entryway until greeted.\n4. Offer collar.',
@@ -101,16 +103,31 @@ function defaultSystemState(role){
 }
 function defaultSubProfile(){
   return {
-    photo:DEFAULT_PHOTO,name:'James',role:'Submissive',dominant:'Sir',notes:'Visible to sub. Editable by Dom only.',
+    photo:DEFAULT_PHOTO,name:'Jacob',role:'Submissive',dominant:'James',notes:'Visible to sub. Editable by Dom only.',
     measurements:{height:'6 ft 2',weight:'12 st 4 lb',neck:'15.5 in',chest:'39 in',bicepL:'12.5 in',bicepR:'12.6 in',waist:'30 in',hips:'36 in',insideLeg:'34 in'},
     anatomy:{softLength:'',hardLength:'',softGirth:'',hardGirth:'',testicularCircumference:''}
   };
 }
-function defaultBodyMaps(){
+function defaultDomProfile(){
   return {
-    ticklish:[{view:'front',x:39,y:34},{view:'front',x:25,y:54},{view:'back',x:50,y:58}],
-    sensitive:[{view:'front',x:50,y:33},{view:'front',x:50,y:62},{view:'back',x:50,y:46}]
+    photo:'https://i.pravatar.cc/320?img=58',name:'James',role:'Dominant',honorific:'Sir',
+    notes:'Edited by James only. Visible to Jacob.',
+    details:{pronouns:'He / Him',dynamicStart:'2024',contact:'In person + app',aftercareStyle:'Calm voice, water, quiet',
+             expectations:'Honesty, prompt replies, evidence on request',hardNo:'No public exposure without consent'}
   };
+}
+function defaultRewardsCatalog(){
+  return [
+    {id:'r1',name:'Movie Night Pick',cost:10,icon:'fa-film',desc:'Choose what we watch together.'},
+    {id:'r2',name:'Lie-In Pass',cost:15,icon:'fa-bed',desc:'One morning, no early alarm.'},
+    {id:'r3',name:'Favourite Meal',cost:20,icon:'fa-utensils',desc:'Request a meal of your choice.'},
+    {id:'r4',name:'Day Off Protocol',cost:40,icon:'fa-dove',desc:'A full day with protocol relaxed.'},
+    {id:'r5',name:'Special Treat',cost:60,icon:'fa-gift',desc:'A surprise chosen by James.'}
+  ];
+}
+function defaultBodyMaps(){
+  /* No preset zones — James adds them by tapping the body. */
+  return { ticklish:[], sensitive:[] };
 }
 function defaultPersonalRecords(){
   const el=['Left Nipple','Right Nipple','Upper Abdomen','Mid Abdomen','Lower Abdomen','Inner Thigh','Genital Area','Anal S','Anal M','Anal L','Urethral Sound','Loops','Violet Wand'];
@@ -121,24 +138,57 @@ function defaultPersonalRecords(){
 }
 function migrateEnhancedState(){
   state={...defaultSystemState(state&&state.currentRole?state.currentRole:'dom'),...(state||{})};
-  if(state.subTitle==='Jacob') state.subTitle='James';
+  /* Naming: Dom is James, Sub is Jacob */
+  if(state.subTitle==='James'||!state.subTitle) state.subTitle='Jacob';
+  if(state.domTitle==='Sir'||!state.domTitle) state.domTitle='James';
   state.dataVersion=5;
   state.badges=ensureArray(state.badges);
   state.disclosures=ensureArray(state.disclosures);
   state.checkIns=ensureArray(state.checkIns);
   state.notifications=ensureArray(state.notifications);
+  state.journalTags=ensureArray(state.journalTags).length?ensureArray(state.journalTags):defaultSystemState().journalTags;
+  state.rewardsCatalog=ensureArray(state.rewardsCatalog).length?ensureArray(state.rewardsCatalog):defaultRewardsCatalog();
   state.tasks=ensureArray(state.tasks).map(t=>({...t,title:titleCase(t.title),evidence:ensureArray(t.evidence)}));
   state.punishments=ensureArray(state.punishments).map(p=>({...p,title:titleCase(p.title),kind:p.kind||'timed'}));
-  state.journal=ensureArray(state.journal).map(e=>({...e,title:titleCase(e.title),attachments:ensureArray(e.attachments)}));
+  state.journal=ensureArray(state.journal).map(e=>({...e,title:titleCase(e.title),attachments:ensureArray(e.attachments),tags:ensureArray(e.tags)}));
   state.limits={...defaultSystemState().limits,...(state.limits||{})};
   state.rules={...defaultSystemState().rules,...(state.rules||{})};
   state.subProfile={...defaultSubProfile(),...(state.subProfile||{})};
+  if(state.subProfile.name==='James') state.subProfile.name='Jacob';
+  state.subProfile.dominant='James';
   state.subProfile.measurements={...defaultSubProfile().measurements,...(state.subProfile.measurements||{})};
   state.subProfile.anatomy={...defaultSubProfile().anatomy,...(state.subProfile.anatomy||{})};
+  state.domProfile={...defaultDomProfile(),...(state.domProfile||{})};
+  state.domProfile.details={...defaultDomProfile().details,...(state.domProfile.details||{})};
   state.bodyMaps={...defaultBodyMaps(),...(state.bodyMaps||{})};
+  state.bodyMaps.ticklish=ensureArray(state.bodyMaps.ticklish);
+  state.bodyMaps.sensitive=ensureArray(state.bodyMaps.sensitive);
   state.personalRecords={...defaultPersonalRecords(),...(state.personalRecords||{})};
   state.personalRecords.breath={...defaultPersonalRecords().breath,...(state.personalRecords.breath||{})};
   state.personalRecords.electro={...defaultPersonalRecords().electro,...(state.personalRecords.electro||{})};
+}
+
+/* ── Normalize: enforce naming + new structures on ANY state source
+   (local default, localStorage, OR remote Firebase snapshot). Runs after
+   remote state is applied because the inline onSnapshot calls our
+   updateRoleUI()/renderCurrentTab(). Persists the fix back so it sticks. ── */
+function normalizeState(){
+  if(!state) return;
+  let changed=false;
+  if(state.domTitle==='Sir'||!state.domTitle){ state.domTitle='James'; changed=true; }
+  if(state.subTitle==='James'||!state.subTitle){ state.subTitle='Jacob'; changed=true; }
+  if(!state.domProfile){ state.domProfile=defaultDomProfile(); changed=true; }
+  else { const dd=defaultDomProfile(); state.domProfile.details={...dd.details,...(state.domProfile.details||{})}; }
+  if(state.subProfile){ if(state.subProfile.name==='James'){ state.subProfile.name='Jacob'; changed=true; } if(state.subProfile.dominant!=='James'){ state.subProfile.dominant='James'; changed=true; } }
+  if(!Array.isArray(state.rewardsCatalog)||!state.rewardsCatalog.length){ state.rewardsCatalog=defaultRewardsCatalog(); changed=true; }
+  if(!Array.isArray(state.journalTags)||!state.journalTags.length){ state.journalTags=defaultSystemState().journalTags; changed=true; }
+  if(!state.bodyMaps) state.bodyMaps={ticklish:[],sensitive:[]};
+  state.bodyMaps.ticklish=ensureArray(state.bodyMaps.ticklish);
+  state.bodyMaps.sensitive=ensureArray(state.bodyMaps.sensitive);
+  state.journal=ensureArray(state.journal).map(e=>({...e,tags:ensureArray(e.tags)}));
+  /* one-time clear of legacy demo zones — James adds his own */
+  if(!state.bmClearedV6){ state.bodyMaps={ticklish:[],sensitive:[]}; state.bmClearedV6=true; changed=true; }
+  if(changed){ try{ saveState(); }catch(_){} }
 }
 
 /* ── State persistence ── */
@@ -224,7 +274,7 @@ function updateHeader(){
   const isDom=state.currentRole==='dom';
   const nameEl=document.getElementById('header-name'); if(nameEl) nameEl.textContent=isDom?state.domTitle:state.subTitle;
   const roleEl=document.getElementById('header-role'); if(roleEl){ roleEl.textContent=isDom?'Dominant':'Submissive'; roleEl.style.color=isDom?'var(--red)':'var(--sage)'; }
-  const avatar=document.getElementById('header-avatar'); if(avatar) avatar.src=isDom?(state.avatar||DEFAULT_PHOTO):(state.subProfile&&state.subProfile.photo?state.subProfile.photo:DEFAULT_PHOTO);
+  const avatar=document.getElementById('header-avatar'); if(avatar) avatar.src=isDom?((state.domProfile&&state.domProfile.photo)||state.avatar||DEFAULT_PHOTO):(state.subProfile&&state.subProfile.photo?state.subProfile.photo:DEFAULT_PHOTO);
   /* Replace right-side header buttons */
   const btns=document.querySelector('.app-header .flex.items-center.gap-x-2:last-child')||document.getElementById('header-action')?.parentElement;
   if(btns){
@@ -234,6 +284,7 @@ function updateHeader(){
 }
 function updateRoleUI(){
   if(!state)return;
+  normalizeState();
   const isDom=state.currentRole==='dom';
   document.querySelectorAll('.dom-only').forEach(el=>el.style.display=isDom?'':'none');
   document.querySelectorAll('.sub-only').forEach(el=>el.style.display=isDom?'none':'');
@@ -415,7 +466,16 @@ function evidenceInput(type){
 }
 function renderSubmittedEvidence(task){
   const items=task.evidence||[]; if(!items.length)return`<div style="font-size:.85rem;opacity:.6">No Evidence Submitted.</div>`;
-  return items.map(item=>item.type==='text'?`<div class="glass" style="padding:1rem;border-radius:1rem"><div style="font-size:.65rem;color:rgba(198,166,66,.7);margin-bottom:.35rem">TEXT REPORT</div><div style="font-size:.85rem;white-space:pre-wrap">${escapeText(item.value)}</div></div>`:`<a href="${item.url}" target="_blank" rel="noopener" class="glass" style="padding:1rem;border-radius:1rem;display:flex;justify-content:space-between;align-items:center"><span style="font-size:.85rem"><i class="fa-solid fa-paperclip" style="margin-right:.5rem"></i>${escapeText(item.name||item.type)}</span><i class="fa-solid fa-arrow-up-right-from-square" style="color:var(--gold)"></i></a>`).join('');
+  const isDom=state.currentRole==='dom';
+  return items.map(item=>{
+    if(item.type==='text') return `<div class="glass" style="padding:1rem;border-radius:1rem"><div style="font-size:.65rem;color:rgba(198,166,66,.7);margin-bottom:.35rem">TEXT REPORT</div><div style="font-size:.85rem;white-space:pre-wrap">${escapeText(item.value)}</div></div>`;
+    /* Only James can re-open / re-watch evidence. Jacob sees it is on file but cannot view. */
+    if(!isDom) return `<div class="glass" style="padding:1rem;border-radius:1rem;display:flex;justify-content:space-between;align-items:center;opacity:.7"><span style="font-size:.85rem"><i class="fa-solid fa-paperclip" style="margin-right:.5rem"></i>${titleCase(item.type)} submitted</span><i class="fa-solid fa-lock" style="color:var(--stone)"></i></div>`;
+    if(item.type==='video') return `<div class="glass" style="padding:.75rem;border-radius:1rem"><div style="font-size:.65rem;color:rgba(198,166,66,.7);margin-bottom:.5rem">VIDEO</div><video src="${item.url}" controls playsinline style="width:100%;border-radius:.75rem;max-height:60vh"></video></div>`;
+    if(item.type==='photo') return `<a href="${item.url}" target="_blank" rel="noopener" class="glass" style="padding:.75rem;border-radius:1rem;display:block"><div style="font-size:.65rem;color:rgba(198,166,66,.7);margin-bottom:.5rem">PHOTO</div><img src="${item.url}" style="width:100%;border-radius:.75rem" loading="lazy"></a>`;
+    if(item.type==='voice') return `<div class="glass" style="padding:1rem;border-radius:1rem"><div style="font-size:.65rem;color:rgba(198,166,66,.7);margin-bottom:.5rem">VOICE NOTE</div><audio src="${item.url}" controls style="width:100%"></audio></div>`;
+    return `<a href="${item.url}" target="_blank" rel="noopener" class="glass" style="padding:1rem;border-radius:1rem;display:flex;justify-content:space-between;align-items:center"><span style="font-size:.85rem"><i class="fa-solid fa-paperclip" style="margin-right:.5rem"></i>${escapeText(item.name||item.type)}</span><i class="fa-solid fa-arrow-up-right-from-square" style="color:var(--gold)"></i></a>`;
+  }).join('');
 }
 function showTaskDetail(task){
   const isSub=state.currentRole==='sub', required=ensureArray(task.requiredEvidence);
@@ -456,17 +516,50 @@ async function completeTask(taskId){
 function uploadEvidenceFile(ref,file,button){ return new Promise((resolve,reject)=>{ const u=ref.put(file,{contentType:file.type}); u.on('state_changed',s=>{ const p=s.totalBytes?Math.round(s.bytesTransferred/s.totalBytes*100):0; button.textContent='Uploading '+file.name+' · '+p+'%'; },reject,async()=>{ try{resolve(await ref.getDownloadURL());}catch(e){reject(e);} }); }); }
 
 /* ── Add task modal ── */
+function _localDateTimeValue(d){
+  const p=n=>String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function setTaskDeadline(minsFromNow){
+  const d=new Date(Date.now()+minsFromNow*60000);
+  const inp=document.getElementById('task-deadline'); if(inp) inp.value=_localDateTimeValue(d);
+  document.querySelectorAll('.qd-btn').forEach(b=>b.classList.remove('qd-on'));
+  const hit=document.querySelector(`.qd-btn[data-min="${minsFromNow}"]`); if(hit) hit.classList.add('qd-on');
+}
 function showAddTaskModal(){
-  const tomorrow=new Date(Date.now()+86400000).toISOString().slice(0,10);
+  const def=new Date(Date.now()+24*60*60000);
+  const quick=[['10 min',10],['30 min',30],['1 hr',60],['3 hr',180],['Tonight',null],['Tomorrow',1440]];
   const modal=document.createElement('div');
-  modal.innerHTML=`<div class="fixed inset-0 bg-black/90 z-[100] flex items-end md:items-center justify-center" onclick="this.remove()"><div onclick="event.stopImmediatePropagation()" class="glass" style="width:100%;max-width:34rem;max-height:92vh;overflow:auto;border-radius:2rem 2rem 0 0;padding:1.5rem;padding-bottom:max(1.5rem,env(safe-area-inset-bottom))"><div style="font-size:1.25rem;font-weight:600;margin-bottom:1.25rem">Assign Task</div><div style="display:flex;flex-direction:column;gap:.85rem"><input id="task-title" class="beautiful-input" style="width:100%;padding:.85rem 1rem;border-radius:1rem" placeholder="Task Title"><textarea id="task-desc" rows="3" class="beautiful-input" style="width:100%;padding:.85rem 1rem;border-radius:1rem;resize:none" placeholder="Instructions"></textarea><div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem"><label style="font-size:.7rem;color:rgba(198,166,66,.7)">DUE DATE<input id="task-due" type="date" value="${tomorrow}" class="beautiful-input" style="width:100%;padding:.7rem .85rem;border-radius:.85rem;margin-top:.25rem;display:block"></label><label style="font-size:.7rem;color:rgba(198,166,66,.7)">TIME<input id="task-time" type="time" class="beautiful-input" style="width:100%;padding:.7rem .85rem;border-radius:.85rem;margin-top:.25rem;display:block"></label></div><select id="task-cat" class="beautiful-input" style="width:100%;padding:.85rem 1rem;border-radius:1rem"><option>Service</option><option>Chore</option><option>Personal</option><option>Consequence Task</option></select><div><div style="font-size:.7rem;color:rgba(198,166,66,.7);margin-bottom:.5rem">REQUIRED PROOF</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">${[['photo','Photo'],['video','Video'],['voice','Voice Note'],['text','Text Report']].map(([id,label])=>`<label class="glass" style="padding:.75rem;border-radius:1rem;font-size:.85rem;display:flex;align-items:center;gap:.5rem;cursor:pointer"><input type="checkbox" id="ev-${id}" style="accent-color:var(--red)">${label}</label>`).join('')}</div></div></div><div style="display:flex;gap:.75rem;margin-top:1.5rem"><button onclick="this.closest('.fixed').remove()" style="flex:1;padding:.85rem;border:1px solid rgba(255,255,255,.2);border-radius:1rem">Cancel</button><button onclick="addNewTask(this)" style="flex:1;padding:.85rem;background:var(--red);border-radius:1rem;color:#fff">Assign</button></div></div></div>`;
+  modal.innerHTML=`<div class="fixed inset-0 bg-black/90 z-[100] flex items-end md:items-center justify-center" onclick="this.remove()"><div onclick="event.stopImmediatePropagation()" class="glass" style="width:100%;max-width:34rem;max-height:92vh;overflow:auto;border-radius:2rem 2rem 0 0;padding:1.5rem;padding-bottom:max(1.5rem,env(safe-area-inset-bottom))">
+    <div style="font-size:1.25rem;font-weight:600;margin-bottom:1.25rem">Assign Task</div>
+    <div style="display:flex;flex-direction:column;gap:.85rem">
+      <input id="task-title" class="beautiful-input" style="width:100%;padding:.85rem 1rem;border-radius:1rem" placeholder="Task Title">
+      <textarea id="task-desc" rows="3" class="beautiful-input" style="width:100%;padding:.85rem 1rem;border-radius:1rem;resize:none" placeholder="Instructions"></textarea>
+      <div>
+        <div style="font-size:.7rem;color:rgba(198,166,66,.7);margin-bottom:.5rem">QUICK DEADLINE — e.g. “complete in 10 minutes”</div>
+        <div style="display:flex;flex-wrap:wrap;gap:.4rem">${quick.map(([label,min])=>`<button type="button" class="qd-btn pill tap" data-min="${min===null?'tonight':min}" onclick="${min===null?'setTaskTonight()':`setTaskDeadline(${min})`}" style="padding:.4rem .9rem;font-size:.72rem">${label}</button>`).join('')}</div>
+      </div>
+      <label style="font-size:.7rem;color:rgba(198,166,66,.7)">DUE DATE &amp; TIME<input id="task-deadline" type="datetime-local" value="${_localDateTimeValue(def)}" class="beautiful-input" style="width:100%;padding:.75rem .85rem;border-radius:.85rem;margin-top:.3rem;display:block"></label>
+      <select id="task-cat" class="beautiful-input" style="width:100%;padding:.85rem 1rem;border-radius:1rem"><option>Service</option><option>Chore</option><option>Personal</option><option>Consequence Task</option></select>
+      <div><div style="font-size:.7rem;color:rgba(198,166,66,.7);margin-bottom:.5rem">REQUIRED PROOF</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">${[['photo','Photo'],['video','Video'],['voice','Voice Note'],['text','Text Report']].map(([id,label])=>`<label class="glass" style="padding:.75rem;border-radius:1rem;font-size:.85rem;display:flex;align-items:center;gap:.5rem;cursor:pointer"><input type="checkbox" id="ev-${id}" style="accent-color:var(--red)">${label}</label>`).join('')}</div></div>
+    </div>
+    <div style="display:flex;gap:.75rem;margin-top:1.5rem"><button onclick="this.closest('.fixed').remove()" style="flex:1;padding:.85rem;border:1px solid rgba(255,255,255,.2);border-radius:1rem">Cancel</button><button onclick="addNewTask(this)" style="flex:1;padding:.85rem;background:var(--red);border-radius:1rem;color:#fff">Assign</button></div>
+  </div></div>`;
   document.getElementById('modal-container').appendChild(modal);
+}
+function setTaskTonight(){
+  const d=new Date(); d.setHours(21,0,0,0); if(d<new Date()) d.setDate(d.getDate()+1);
+  const inp=document.getElementById('task-deadline'); if(inp) inp.value=_localDateTimeValue(d);
+  document.querySelectorAll('.qd-btn').forEach(b=>b.classList.remove('qd-on'));
+  const hit=document.querySelector('.qd-btn[data-min="tonight"]'); if(hit) hit.classList.add('qd-on');
 }
 function addNewTask(button){
   const title=titleCase(document.getElementById('task-title').value||'Untitled Task');
-  const date=document.getElementById('task-due').value, time=document.getElementById('task-time').value;
+  const dl=document.getElementById('task-deadline').value; // datetime-local: YYYY-MM-DDTHH:MM
+  const dueAt=dl?dl+':00':new Date(Date.now()+86400000).toISOString();
+  const date=(dl||new Date(Date.now()+86400000).toISOString()).slice(0,10);
   const required=['photo','video','voice','text'].filter(t=>document.getElementById('ev-'+t)?.checked);
-  const task={id:Date.now(),title,desc:document.getElementById('task-desc').value.trim(),due:date,dueAt:date+'T'+(time||'23:59')+':00',category:document.getElementById('task-cat').value,status:'pending',priority:2,requiredEvidence:required,assignedAt:new Date().toISOString(),evidence:[]};
+  const task={id:Date.now(),title,desc:document.getElementById('task-desc').value.trim(),due:date,dueAt,category:document.getElementById('task-cat').value,status:'pending',priority:2,requiredEvidence:required,assignedAt:new Date().toISOString(),evidence:[]};
   state.tasks.unshift(task);
   if(task.category==='Consequence Task') state.punishments.unshift({id:Date.now()+1,title:task.title,desc:task.desc,kind:'task',linkedTaskId:task.id,status:'active',assignedAt:new Date().toISOString()});
   addNotification('task','Task assigned',task.title,'tasks'); saveState(); button.closest('.fixed').remove(); renderTasks(); renderDashboard(); showConfetti(20);
@@ -491,12 +584,60 @@ function renderProtocolRules(){
 function renderBoundaryPanel(){
   return`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem"><div><div style="font-size:1.4rem;font-weight:600">Boundaries</div><div style="font-size:.75rem;color:var(--stone)">Same icon treatment as Protocols.</div></div>${state.currentRole==='dom'?`<button onclick="showAddLimitModal()" class="tap" style="padding:.5rem 1rem;background:var(--red);border-radius:.85rem;font-size:.8rem">+ Add</button>`:''}</div><div style="display:flex;flex-direction:column;gap:1rem">${LIMIT_GROUPS.map(([key,label,glyph])=>`<section class="card" style="padding:1.25rem"><div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem"><span class="icon-tile">${glyph}</span><div style="font-weight:600">${label}</div></div><div style="display:flex;flex-wrap:wrap;gap:.5rem">${ensureArray(state.limits[key]).map(item=>`<span class="pill" style="padding:.4rem 1rem;font-size:.85rem">${escapeText(typeof item==='string'?item:item.text)}</span>`).join('')||'<div style="font-size:.75rem;opacity:.4">Nothing Listed.</div>'}</div></section>`).join('')}</div>`;
 }
-function humanOutline(kind,view){
+/* Anatomically-shaped silhouette (front + back share the same body form) */
+function bodySilhouette(view){
+  const back = view==='back';
+  // A filled humanoid silhouette built from a single smooth path
+  const body = `M100 16
+    c-13 0 -22 10 -22 24 c0 9 4 16 10 20
+    c-9 3 -14 9 -15 19 l-4 34
+    c-6 4 -22 14 -27 24 c-3 6 -9 22 -11 32 c-1 6 6 9 9 3 c4 -9 9 -20 13 -26
+    c3 -4 7 -8 11 -10 l-3 40 c-1 14 -1 30 1 44 l4 64 c1 10 1 22 -1 32 l-5 30
+    c-2 9 11 12 14 3 l9 -34 c3 -11 5 -24 6 -35 l3 -40 l3 0 l3 40
+    c1 11 3 24 6 35 l9 34 c3 9 16 6 14 -3 l-5 -30 c-2 -10 -2 -22 -1 -32 l4 -64
+    c2 -14 2 -30 1 -44 l-3 -40 c4 2 8 6 11 10 c4 6 9 17 13 26 c3 6 10 3 9 -3
+    c-2 -10 -8 -26 -11 -32 c-5 -10 -21 -20 -27 -24 l-4 -34
+    c-1 -10 -6 -16 -15 -19 c6 -4 10 -11 10 -20 c0 -14 -9 -24 -22 -24 z`;
+  const detail = back
+    ? `<path class="bm-line" d="M100 118 L100 196" /><path class="bm-line" d="M78 150 q22 10 44 0" />`
+    : `<path class="bm-line" d="M84 92 q16 8 32 0" /><circle class="bm-line" cx="88" cy="104" r="2.5"/><circle class="bm-line" cx="112" cy="104" r="2.5"/><path class="bm-line" d="M100 120 L100 168" />`;
+  return `<svg viewBox="0 0 200 320" preserveAspectRatio="xMidYMid meet"><path class="bm-body" d="${body}"/>${detail}</svg>`;
+}
+function bodyFigure(kind,view){
   const zones=ensureArray(state.bodyMaps[kind]).filter(z=>z.view===view);
-  return`<div class="human-outline"><svg viewBox="0 0 180 300" aria-hidden="true"><circle cx="90" cy="32" r="22"/><path d="M64 70 L116 70 L132 158 L110 230 L96 288"/><path d="M64 70 L48 158 L70 230 L84 288"/><path d="M62 82 L25 145 L34 220"/><path d="M118 82 L155 145 L146 220"/><path d="M58 170 L122 170"/></svg>${zones.map(z=>`<span class="body-zone pulse-dot ${kind==='ticklish'?'zone-ticklish':'zone-sensitive'}" style="left:${z.x}%;top:${z.y}%"></span>`).join('')}</div>`;
+  const dom=state.currentRole==='dom';
+  return`<div class="human-outline${dom?' bm-editable':''}" data-kind="${kind}" data-view="${view}"${dom?` onclick="handleBodyClick(event,'${kind}','${view}')"`:''}>${bodySilhouette(view)}${zones.map((z,i)=>`<span class="body-zone pulse-dot ${kind==='ticklish'?'zone-ticklish':'zone-sensitive'}" style="left:${z.x}%;top:${z.y}%"${dom?` onclick="event.stopPropagation();removeBodyZone('${kind}','${view}',${i})" title="Remove zone"`:''}></span>`).join('')}</div>`;
 }
 function renderBodyMapsPanel(){
-  return`<div style="display:flex;flex-direction:column;gap:1rem"><section class="card" style="padding:1.25rem"><div style="display:flex;justify-content:space-between"><div><div style="font-size:1.2rem;font-weight:600">Ticklish Areas</div><div style="font-size:.75rem;color:var(--stone);margin-top:.2rem">Saved for easy reference.</div></div><span class="pill" style="font-size:.65rem;padding:.35rem .75rem;flex-shrink:0">Dom edit only</span></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:1.25rem;text-align:center"><div><div style="font-size:.7rem;color:var(--sage);margin-bottom:.5rem">Front</div>${humanOutline('ticklish','front')}</div><div><div style="font-size:.7rem;color:var(--sage);margin-bottom:.5rem">Back</div>${humanOutline('ticklish','back')}</div></div></section><section class="card" style="padding:1.25rem"><div style="display:flex;justify-content:space-between"><div><div style="font-size:1.2rem;font-weight:600">Sensitive Areas</div><div style="font-size:.75rem;color:var(--stone);margin-top:.2rem">Saved for easy reference.</div></div><span class="pill" style="font-size:.65rem;padding:.35rem .75rem;flex-shrink:0">Dom edit only</span></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:1.25rem;text-align:center"><div><div style="font-size:.7rem;color:var(--rose);margin-bottom:.5rem">Front</div>${humanOutline('sensitive','front')}</div><div><div style="font-size:.7rem;color:var(--rose);margin-bottom:.5rem">Back</div>${humanOutline('sensitive','back')}</div></div></section></div>`;
+  const dom=state.currentRole==='dom';
+  const hint=dom?'<div style="font-size:.72rem;color:var(--gold);margin-top:.2rem">Tap the body to add a zone · tap a dot to remove it.</div>':'<div style="font-size:.75rem;color:var(--stone);margin-top:.2rem">Saved for easy reference.</div>';
+  const lock=dom?'':'<span class="pill" style="font-size:.65rem;padding:.35rem .75rem;flex-shrink:0">View only</span>';
+  return`<div style="display:flex;flex-direction:column;gap:1rem">
+    <section class="card" style="padding:1.25rem">
+      <div style="display:flex;justify-content:space-between"><div><div style="font-size:1.2rem;font-weight:600"><i class="fa-solid fa-feather" style="color:var(--sage);margin-right:.4rem"></i>Ticklish Areas</div>${hint}</div>${lock}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:1.25rem;text-align:center"><div><div style="font-size:.7rem;color:var(--sage);margin-bottom:.5rem;letter-spacing:2px">FRONT</div>${bodyFigure('ticklish','front')}</div><div><div style="font-size:.7rem;color:var(--sage);margin-bottom:.5rem;letter-spacing:2px">BACK</div>${bodyFigure('ticklish','back')}</div></div>
+    </section>
+    <section class="card" style="padding:1.25rem">
+      <div style="display:flex;justify-content:space-between"><div><div style="font-size:1.2rem;font-weight:600"><i class="fa-solid fa-hand-sparkles" style="color:var(--rose);margin-right:.4rem"></i>Sensitive Areas</div>${hint}</div>${lock}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:1.25rem;text-align:center"><div><div style="font-size:.7rem;color:var(--rose);margin-bottom:.5rem;letter-spacing:2px">FRONT</div>${bodyFigure('sensitive','front')}</div><div><div style="font-size:.7rem;color:var(--rose);margin-bottom:.5rem;letter-spacing:2px">BACK</div>${bodyFigure('sensitive','back')}</div></div>
+    </section>
+  </div>`;
+}
+function handleBodyClick(ev,kind,view){
+  if(state.currentRole!=='dom')return;
+  const box=ev.currentTarget.getBoundingClientRect();
+  const x=Math.round(((ev.clientX-box.left)/box.width)*100);
+  const y=Math.round(((ev.clientY-box.top)/box.height)*100);
+  if(x<0||x>100||y<0||y>100)return;
+  ensureArray(state.bodyMaps[kind]).push({view,x,y});
+  saveState(); renderProtocols();
+  showToast('Zone added','success');
+}
+function removeBodyZone(kind,view,indexInView){
+  const all=ensureArray(state.bodyMaps[kind]);
+  let seen=-1;
+  for(let i=0;i<all.length;i++){ if(all[i].view===view){ seen++; if(seen===indexInView){ all.splice(i,1); break; } } }
+  saveState(); renderProtocols();
 }
 function measurementRows(){ const m=state.subProfile.measurements; return [['Height',m.height],['Weight',m.weight],['Neck',m.neck],['Chest',m.chest],['Bicep L',m.bicepL],['Bicep R',m.bicepR],['Waist',m.waist],['Hips',m.hips],['Inside Leg',m.insideLeg]]; }
 function anatomyRows(){ const a=state.subProfile.anatomy; return [['Soft Length',a.softLength],['Hard Length',a.hardLength],['Soft Girth',a.softGirth],['Hard Girth',a.hardGirth],['Testicular Circumference',a.testicularCircumference]]; }
@@ -517,22 +658,197 @@ function renderPunishments(){
   updateCountdowns();
 }
 
-/* ── Rewards — FULL REBUILD ── */
+/* ── Rewards — animated stars, redeemable catalog, badge progress ── */
+function badgeProgress(id){
+  const completed=state.tasks.filter(t=>t.status==='completed').length;
+  const journals=state.journal.length;
+  const consDone=state.punishments.filter(p=>p.status==='completed').length;
+  switch(id){
+    case 'first-contact': return {cur:Math.min(1,completed+journals?1:0),goal:1};
+    case 'steady-service': return {cur:Math.min(completed,5),goal:5};
+    case 'inner-world': return {cur:Math.min(journals,3),goal:3};
+    case 'accountable': return {cur:Math.min(consDone,1),goal:1};
+    case 'gold-standard': return {cur:Math.min(state.stars||0,25),goal:25};
+    default: return {cur:0,goal:1};
+  }
+}
+function animateStars(toValue){
+  const el=document.getElementById('star-count'); if(!el)return;
+  const from=parseInt(el.dataset.val||'0',10), to=toValue;
+  const start=performance.now(), dur=700;
+  function step(now){ const p=Math.min(1,(now-start)/dur); const eased=1-Math.pow(1-p,3); el.textContent=Math.round(from+(to-from)*eased); if(p<1) requestAnimationFrame(step); else { el.dataset.val=to; el.classList.remove('star-pop'); void el.offsetWidth; el.classList.add('star-pop'); } }
+  requestAnimationFrame(step);
+}
 function renderRewards(){
   const tab=document.getElementById('tab-stars'); if(!tab)return;
-  tab.innerHTML=`<div style="text-align:center;margin-bottom:2rem"><div class="logo-orb" style="display:inline-flex;align-items:center;justify-content:center;width:6rem;height:6rem;border-radius:999px;margin-bottom:1rem"><i class="fa-solid fa-star" style="color:#fff;font-size:3rem"></i></div><div style="font-size:1.25rem;font-weight:600">Stars Earned</div><div style="font-size:3.75rem;font-weight:700;color:var(--gold);font-variant-numeric:tabular-nums">${state.stars||0}</div></div><div class="card" style="padding:1.25rem;margin-bottom:1.25rem"><div style="font-weight:600;font-size:1.1rem;margin-bottom:1rem">Recent Awards</div><div style="display:flex;flex-direction:column;gap:.5rem">${ensureArray(state.starLog).slice(0,25).map(s=>`<div style="display:flex;justify-content:space-between;padding:.75rem 1rem;background:rgba(255,255,255,.05);border-radius:1rem;font-size:.85rem"><span>${escapeText(s.reason)}</span><span style="color:var(--gold)">+${s.amount} ★</span></div>`).join('')||`<div style="font-size:.85rem;opacity:.6">No Stars Earned Yet.</div>`}</div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">${SYSTEM_BADGES.map(b=>{ const earned=ensureArray(state.badges).some(x=>x.id===b.id); return`<button onclick="showBadge('${b.id}')" class="card tap" style="padding:1rem;text-align:left;${earned?'border-color:rgba(198,166,66,.4)':'opacity:.6'}"><i class="fa-solid ${b.icon}" style="font-size:1.5rem;color:${earned?'var(--gold)':'rgba(255,255,255,.3)'}"></i><div style="font-weight:600;margin-top:.75rem">${b.name}</div><div style="font-size:.65rem;margin-top:.25rem;letter-spacing:2px;color:${earned?'#34d399':'rgba(255,255,255,.3)'}">${earned?'AUTHORISED':'LOCKED'}</div></button>`; }).join('')}</div>`;
-}
-function showBadge(id){ const b=SYSTEM_BADGES.find(x=>x.id===id), earned=ensureArray(state.badges).some(x=>x.id===id); const m=document.createElement('div'); m.innerHTML=`<div class="fixed inset-0 bg-black/90 z-[150] flex items-center justify-center p-6" onclick="this.remove()"><div onclick="event.stopImmediatePropagation()" class="glass" style="max-width:22rem;width:100%;border-radius:2rem;padding:1.75rem;text-align:center"><i class="fa-solid ${b.icon}" style="font-size:3.5rem;color:var(--gold);margin-bottom:1.25rem;display:block"></i><div style="font-size:1.4rem;font-weight:600">${b.name}</div><div style="font-size:.85rem;margin-top:.75rem;opacity:.8">${b.goal}</div>${state.currentRole==='dom'&&!earned?`<button onclick="authoriseBadge('${id}',this)" style="width:100%;margin-top:1.5rem;padding:.85rem;background:var(--red);border-radius:1rem;color:#fff">Authorise Award</button>`:`<div style="margin-top:1.5rem;font-size:.85rem;color:${earned?'#34d399':'rgba(255,255,255,.4)'}">${earned?'Awarded By Sir':'Awaiting Authorisation'}</div>`}</div></div>`; document.getElementById('modal-container').appendChild(m); }
-function authoriseBadge(id,button){ ensureArray(state.badges); state.badges.push({id,authorisedAt:new Date().toISOString()}); saveState(); button.closest('.fixed').remove(); renderRewards(); showConfetti(40); }
+  const isDom=state.currentRole==='dom';
+  const stars=state.stars||0;
+  const catalog=ensureArray(state.rewardsCatalog);
+  tab.innerHTML=`
+    <div class="reward-hero" style="text-align:center;margin-bottom:1.75rem;position:relative;overflow:hidden;border-radius:2rem;padding:2rem 1rem 1.75rem">
+      <div class="star-orb"><i class="fa-solid fa-star"></i></div>
+      <div style="font-size:.7rem;letter-spacing:3px;color:rgba(198,166,66,.8);margin-top:1rem">STAR BALANCE</div>
+      <div id="star-count" data-val="${stars}" class="star-big" style="font-size:4.5rem;font-weight:800;color:var(--gold);font-variant-numeric:tabular-nums;line-height:1">${stars}</div>
+      <div style="font-size:.8rem;color:var(--stone)">Collect stars · redeem them below</div>
+    </div>
 
-/* ── Journal — FULL REBUILD ── */
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.85rem">
+      <span style="font-weight:600;font-size:1.15rem"><i class="fa-solid fa-gift" style="color:var(--rose);margin-right:.4rem"></i>Reward Shop</span>
+      ${isDom?`<button onclick="showAddRewardModal()" class="pill tap" style="font-size:.7rem;padding:.35rem .9rem;color:var(--gold)">+ Add</button>`:''}
+    </div>
+    <div style="display:flex;flex-direction:column;gap:.75rem;margin-bottom:1.75rem">
+      ${catalog.map(r=>{ const affordable=stars>=r.cost; return `
+        <div class="card reward-card${affordable?' affordable':''}" style="padding:1rem 1.15rem;display:flex;align-items:center;gap:1rem">
+          <div class="reward-icon"><i class="fa-solid ${r.icon||'fa-gift'}"></i></div>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:600">${escapeText(r.name)}</div>
+            <div style="font-size:.75rem;color:var(--stone);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeText(r.desc||'')}</div>
+          </div>
+          <div style="text-align:right;flex-shrink:0">
+            <div style="font-size:.9rem;color:var(--gold);font-weight:700">${r.cost}★</div>
+            ${isDom
+              ? `<button onclick="removeReward('${r.id}')" class="tap" style="font-size:.65rem;color:var(--stone);margin-top:.25rem">remove</button>`
+              : `<button onclick="redeemReward('${r.id}',this)" ${affordable?'':'disabled'} class="tap" style="margin-top:.3rem;font-size:.7rem;padding:.3rem .8rem;border-radius:.8rem;${affordable?'background:var(--sage-2);color:#fff':'background:rgba(255,255,255,.06);color:var(--stone)'}">${affordable?'Redeem':'Locked'}</button>`}
+          </div>
+        </div>`; }).join('')||`<div style="font-size:.85rem;opacity:.6;padding:.5rem">No rewards yet.</div>`}
+    </div>
+
+    <div style="font-weight:600;font-size:1.15rem;margin-bottom:.85rem"><i class="fa-solid fa-medal" style="color:var(--gold);margin-right:.4rem"></i>Badges</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:1.75rem">
+      ${SYSTEM_BADGES.map(b=>{ const earned=ensureArray(state.badges).some(x=>x.id===b.id); const pr=badgeProgress(b.id); const pct=Math.round(pr.cur/pr.goal*100); return`
+        <button onclick="showBadge('${b.id}')" class="card tap badge-card${earned?' badge-earned':''}" style="padding:1.1rem;text-align:center;${earned?'':'opacity:.92'}">
+          <div class="badge-medallion${earned?' shine':''}"><i class="fa-solid ${b.icon}"></i></div>
+          <div style="font-weight:600;margin-top:.6rem;font-size:.85rem">${b.name}</div>
+          ${earned?`<div style="font-size:.6rem;margin-top:.3rem;letter-spacing:2px;color:#34d399">EARNED</div>`
+            :`<div class="badge-bar" style="margin-top:.5rem"><span style="width:${pct}%"></span></div><div style="font-size:.6rem;margin-top:.25rem;color:var(--stone)">${pr.cur}/${pr.goal}</div>`}
+        </button>`; }).join('')}
+    </div>
+
+    <div class="card" style="padding:1.25rem"><div style="font-weight:600;font-size:1.05rem;margin-bottom:1rem">Recent Activity</div><div style="display:flex;flex-direction:column;gap:.5rem">${ensureArray(state.starLog).slice(0,25).map(s=>`<div style="display:flex;justify-content:space-between;padding:.7rem 1rem;background:rgba(255,255,255,.05);border-radius:1rem;font-size:.85rem"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeText(s.reason)}</span><span style="color:${s.amount<0?'var(--rose)':'var(--gold)'};flex-shrink:0;margin-left:.5rem">${s.amount>0?'+':''}${s.amount} ★</span></div>`).join('')||`<div style="font-size:.85rem;opacity:.6">No Stars Earned Yet.</div>`}</div></div>`;
+  const starEl=document.getElementById('star-count'); if(starEl){ starEl.dataset.val='0'; animateStars(stars); }
+}
+function redeemReward(id,btn){
+  const r=ensureArray(state.rewardsCatalog).find(x=>x.id===id); if(!r)return;
+  if((state.stars||0)<r.cost) return showToast('Not enough stars yet','error');
+  if(!confirm(`Redeem “${r.name}” for ${r.cost} stars?`))return;
+  state.stars-=r.cost;
+  state.starLog.unshift({id:Date.now(),date:new Date().toISOString().slice(0,10),reason:'Redeemed: '+r.name,amount:-r.cost});
+  addNotification('reward','Reward redeemed',r.name+' — '+r.cost+' stars','stars');
+  saveState(); showConfetti(50); renderRewards(); updateHeader();
+  showToast('Redeemed '+r.name,'success');
+}
+function showAddRewardModal(){
+  const m=document.createElement('div');
+  m.innerHTML=`<div class="fixed inset-0 bg-black/90 z-[150] flex items-end md:items-center justify-center" onclick="this.remove()"><div onclick="event.stopImmediatePropagation()" class="glass" style="width:100%;max-width:28rem;border-radius:2rem 2rem 0 0;padding:1.5rem;padding-bottom:max(1.5rem,env(safe-area-inset-bottom))"><div style="font-size:1.25rem;font-weight:600;margin-bottom:1.25rem">Add Reward</div><input id="rw-name" class="beautiful-input" style="width:100%;padding:.85rem 1rem;border-radius:1rem;margin-bottom:.75rem" placeholder="Reward name"><input id="rw-desc" class="beautiful-input" style="width:100%;padding:.85rem 1rem;border-radius:1rem;margin-bottom:.75rem" placeholder="Short description"><input id="rw-cost" type="number" min="1" value="15" class="beautiful-input" style="width:100%;padding:.85rem 1rem;border-radius:1rem" placeholder="Star cost"><button onclick="addReward(this)" style="width:100%;margin-top:1.25rem;padding:.85rem;background:var(--red);border-radius:1rem;color:#fff">Add Reward</button></div></div>`;
+  document.getElementById('modal-container').appendChild(m);
+}
+function addReward(button){
+  const name=document.getElementById('rw-name').value.trim(); if(!name)return alert('Name required.');
+  const cost=Math.max(1,parseInt(document.getElementById('rw-cost').value||'10',10));
+  state.rewardsCatalog.push({id:'r'+Date.now(),name,desc:document.getElementById('rw-desc').value.trim(),cost,icon:'fa-gift'});
+  saveState(); button.closest('.fixed').remove(); renderRewards();
+}
+function removeReward(id){ state.rewardsCatalog=ensureArray(state.rewardsCatalog).filter(r=>r.id!==id); saveState(); renderRewards(); }
+function showBadge(id){
+  const b=SYSTEM_BADGES.find(x=>x.id===id), earned=ensureArray(state.badges).some(x=>x.id===id), pr=badgeProgress(id), pct=Math.round(pr.cur/pr.goal*100);
+  const m=document.createElement('div');
+  m.innerHTML=`<div class="fixed inset-0 bg-black/90 z-[150] flex items-center justify-center p-6" onclick="this.remove()"><div onclick="event.stopImmediatePropagation()" class="glass" style="max-width:22rem;width:100%;border-radius:2rem;padding:2rem 1.75rem;text-align:center"><div class="badge-medallion big ${earned?'shine':''}" style="margin:0 auto"><i class="fa-solid ${b.icon}"></i></div><div style="font-size:1.4rem;font-weight:600;margin-top:1.25rem">${b.name}</div><div style="font-size:.85rem;margin-top:.6rem;opacity:.8">${b.goal}</div>${earned?`<div style="margin-top:1.5rem;font-size:.85rem;color:#34d399"><i class="fa-solid fa-circle-check" style="margin-right:.3rem"></i>Awarded by James</div>`:`<div class="badge-bar" style="margin:1.5rem 0 .4rem"><span style="width:${pct}%"></span></div><div style="font-size:.7rem;color:var(--stone)">${pr.cur} of ${pr.goal}</div>${state.currentRole==='dom'?`<button onclick="authoriseBadge('${id}',this)" style="width:100%;margin-top:1.25rem;padding:.85rem;background:var(--red);border-radius:1rem;color:#fff">Authorise Award</button>`:''}`}</div></div>`;
+  document.getElementById('modal-container').appendChild(m);
+}
+function authoriseBadge(id,button){ state.badges=ensureArray(state.badges); if(!state.badges.some(x=>x.id===id)) state.badges.push({id,authorisedAt:new Date().toISOString()}); saveState(); button.closest('.fixed').remove(); renderRewards(); showConfetti(50); }
+
+/* ── Journal — search by word/tag, Dom-only tags, sub view list only ── */
+var journalSearch='';
+var journalTagFilter='';
+function journalMatches(e){
+  const q=journalSearch.trim().toLowerCase();
+  if(journalTagFilter && !ensureArray(e.tags).includes(journalTagFilter)) return false;
+  if(!q) return true;
+  const hay=(titleCase(e.title)+' '+(e.body||'')+' '+ensureArray(e.tags).join(' ')).toLowerCase();
+  return hay.includes(q);
+}
 function renderJournal(){
   const tab=document.getElementById('tab-journal'); if(!tab)return;
-  tab.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1.25rem"><div><div class="heading-serif" style="font-size:2.5rem">Journal</div><div style="font-size:.8rem;color:var(--stone);margin-top:.25rem">${state.journal.length} entries</div></div><button onclick="showNewJournalModal()" class="tap" style="padding:.55rem 1.1rem;background:var(--red);border-radius:1rem;font-size:.8rem;color:#fff;flex-shrink:0"><i class="fa-solid fa-pen" style="margin-right:.3rem"></i>New Entry</button></div><div id="journal-entries" style="display:flex;flex-direction:column;gap:1rem">${state.journal.map(e=>`<button onclick="openJournalEntry(${e.id})" class="card tap" style="text-align:left;padding:1.25rem;display:block;width:100%"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div><div style="font-weight:600;font-size:1.05rem">${escapeText(titleCase(e.title))}</div><div style="font-size:.7rem;color:rgba(198,166,66,.7);margin-top:.25rem">${formatUKDate(e.date)}</div></div><i class="fa-solid fa-feather" style="color:var(--gold);flex-shrink:0"></i></div><div style="font-size:.85rem;margin-top:.75rem;opacity:.75;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${escapeText(e.body||'')}</div></button>`).join('')||`<div style="text-align:center;padding:2rem;color:rgba(198,166,66,.5)">No Journal Entries Yet.</div>`}</div>`;
+  const isDom=state.currentRole==='dom';
+  const allTags=[...new Set([...ensureArray(state.journalTags),...state.journal.flatMap(e=>ensureArray(e.tags))])];
+  const list=state.journal.filter(journalMatches);
+  tab.innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1rem">
+      <div><div class="heading-serif" style="font-size:2.5rem">Journal</div><div style="font-size:.8rem;color:var(--stone);margin-top:.25rem">${state.journal.length} entries</div></div>
+      <button onclick="showNewJournalModal()" class="tap" style="padding:.55rem 1.1rem;background:var(--red);border-radius:1rem;font-size:.8rem;color:#fff;flex-shrink:0"><i class="fa-solid fa-pen" style="margin-right:.3rem"></i>New</button>
+    </div>
+    <div style="position:relative;margin-bottom:.85rem">
+      <i class="fa-solid fa-magnifying-glass" style="position:absolute;left:1rem;top:50%;transform:translateY(-50%);color:var(--stone);font-size:.85rem"></i>
+      <input id="journal-search" oninput="journalSearch=this.value;refreshJournalList()" value="${escapeText(journalSearch)}" placeholder="Search words or tags…" class="beautiful-input" style="width:100%;padding:.8rem 1rem .8rem 2.5rem;border-radius:1rem">
+    </div>
+    ${allTags.length?`<div style="display:flex;gap:.4rem;overflow-x:auto;padding-bottom:.5rem;margin-bottom:.85rem">
+      <button onclick="journalTagFilter='';renderJournal()" class="pill tap" style="padding:.35rem .9rem;font-size:.7rem;white-space:nowrap;${journalTagFilter===''?'background:var(--red-2);border-color:var(--red);color:#fff':''}">All</button>
+      ${allTags.map(t=>`<button onclick="journalTagFilter='${escapeText(t)}';renderJournal()" class="pill tap" style="padding:.35rem .9rem;font-size:.7rem;white-space:nowrap;${journalTagFilter===t?'background:var(--red-2);border-color:var(--red);color:#fff':''}">#${escapeText(t)}</button>`).join('')}
+    </div>`:''}
+    <div id="journal-entries" style="display:flex;flex-direction:column;gap:1rem">${journalCards(list,isDom)}</div>`;
 }
-function showNewJournalModal(){ const m=document.createElement('div'); m.innerHTML=`<div class="fixed inset-0 bg-black/90 z-[100] flex items-end md:items-center justify-center" onclick="this.remove()"><div onclick="event.stopImmediatePropagation()" class="glass" style="width:100%;max-width:28rem;border-radius:2rem 2rem 0 0;padding:1.5rem;padding-bottom:max(1.5rem,env(safe-area-inset-bottom))"><div style="font-size:1.25rem;font-weight:600;margin-bottom:1.25rem">New Journal Entry</div><input id="journal-title" class="beautiful-input" style="width:100%;padding:.85rem 1rem;border-radius:1rem;margin-bottom:.75rem" placeholder="Title"><textarea id="journal-body" rows="7" class="beautiful-input" style="width:100%;padding:.85rem 1rem;border-radius:1rem;resize:none" placeholder="Write your entry..."></textarea><button onclick="addJournalEntry(this)" style="width:100%;margin-top:1.25rem;padding:.85rem;background:var(--red);border-radius:1rem;color:#fff">Save Entry</button></div></div>`; document.getElementById('modal-container').appendChild(m); }
-function addJournalEntry(button){ const title=titleCase(document.getElementById('journal-title').value||'Journal Entry'), body=document.getElementById('journal-body').value.trim(); if(!body)return alert('Please write something before saving.'); state.journal.unshift({id:Date.now(),title,body,date:new Date().toISOString(),attachments:[]}); addNotification('journal','Journal saved',title,'journal'); saveState(); button.closest('.fixed').remove(); renderJournal(); renderDashboard(); }
-function openJournalEntry(id){ const e=state.journal.find(x=>String(x.id)===String(id)); if(!e)return; const m=document.createElement('div'); m.innerHTML=`<div class="fixed inset-0 z-[200] flex items-end md:items-center justify-center" style="background:rgba(0,0,0,.95)" onclick="this.remove()"><article onclick="event.stopImmediatePropagation()" style="background:#151515;width:100%;max-width:44rem;max-height:94vh;overflow:auto;border-radius:2rem 2rem 0 0;padding:1.75rem;padding-bottom:max(1.75rem,env(safe-area-inset-bottom))"><button onclick="this.closest('[onclick]').remove()" style="float:right;font-size:1.5rem;color:var(--stone)">×</button><div style="font-size:.7rem;letter-spacing:3px;color:var(--gold)">${formatUKDate(e.date)} · ${formatUKTime(e.date)}</div><h1 class="heading-serif" style="font-size:2.5rem;margin:.75rem 0 1.5rem">${escapeText(titleCase(e.title))}</h1><div style="font-size:1rem;white-space:pre-wrap;line-height:1.8">${escapeText(e.body)}</div></article></div>`; document.getElementById('modal-container').appendChild(m); }
+function journalCards(list,isDom){
+  if(!list.length) return `<div style="text-align:center;padding:2rem;color:rgba(198,166,66,.5)">${state.journal.length?'No entries match your search.':'No Journal Entries Yet.'}</div>`;
+  return list.map(e=>{
+    const tags=ensureArray(e.tags);
+    const tagHtml=tags.length?`<div style="display:flex;flex-wrap:wrap;gap:.35rem;margin-top:.6rem">${tags.map(t=>`<span class="pill" style="font-size:.62rem;padding:.2rem .6rem;color:var(--gold)">#${escapeText(t)}</span>`).join('')}</div>`:'';
+    const inner=`<div style="display:flex;justify-content:space-between;align-items:flex-start"><div><div style="font-weight:600;font-size:1.05rem">${escapeText(titleCase(e.title))}</div><div style="font-size:.7rem;color:rgba(198,166,66,.7);margin-top:.25rem">${formatUKDate(e.date)}</div></div><i class="fa-solid fa-feather" style="color:var(--gold);flex-shrink:0"></i></div><div style="font-size:.85rem;margin-top:.75rem;opacity:.75;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${escapeText(e.body||'')}</div>${tagHtml}`;
+    // Dom can re-open; sub sees preview only (no re-open)
+    return isDom
+      ? `<button onclick="openJournalEntry(${e.id})" class="card tap" style="text-align:left;padding:1.25rem;display:block;width:100%">${inner}</button>`
+      : `<div class="card" style="padding:1.25rem;position:relative"><span class="pill" style="position:absolute;top:.85rem;right:.85rem;font-size:.6rem;padding:.2rem .6rem"><i class="fa-solid fa-lock" style="margin-right:.25rem"></i>James only</span>${inner}</div>`;
+  }).join('');
+}
+function refreshJournalList(){
+  const box=document.getElementById('journal-entries'); if(!box)return;
+  box.innerHTML=journalCards(state.journal.filter(journalMatches),state.currentRole==='dom');
+}
+function showNewJournalModal(){
+  const isDom=state.currentRole==='dom';
+  const tags=ensureArray(state.journalTags);
+  const m=document.createElement('div');
+  m.innerHTML=`<div class="fixed inset-0 bg-black/90 z-[100] flex items-end md:items-center justify-center" onclick="this.remove()"><div onclick="event.stopImmediatePropagation()" class="glass" style="width:100%;max-width:28rem;border-radius:2rem 2rem 0 0;padding:1.5rem;padding-bottom:max(1.5rem,env(safe-area-inset-bottom))"><div style="font-size:1.25rem;font-weight:600;margin-bottom:1.25rem">New Journal Entry</div><input id="journal-title" class="beautiful-input" style="width:100%;padding:.85rem 1rem;border-radius:1rem;margin-bottom:.75rem" placeholder="Title"><textarea id="journal-body" rows="6" class="beautiful-input" style="width:100%;padding:.85rem 1rem;border-radius:1rem;resize:none" placeholder="Write your entry..."></textarea>
+  ${isDom?`<div style="font-size:.65rem;color:var(--gold);letter-spacing:2px;margin:1rem 0 .5rem">TAGS (James only)</div><div id="jtag-picker" style="display:flex;flex-wrap:wrap;gap:.4rem">${tags.map(t=>`<button type="button" onclick="this.classList.toggle('tag-on')" data-tag="${escapeText(t)}" class="pill tap" style="padding:.3rem .8rem;font-size:.7rem">#${escapeText(t)}</button>`).join('')}</div><input id="jtag-new" class="beautiful-input" style="width:100%;padding:.6rem 1rem;border-radius:1rem;margin-top:.6rem;font-size:.8rem" placeholder="+ new tag, then Save">`:`<div style="font-size:.7rem;color:var(--stone);margin-top:.75rem">Tags are added by James.</div>`}
+  <button onclick="addJournalEntry(this)" style="width:100%;margin-top:1.25rem;padding:.85rem;background:var(--red);border-radius:1rem;color:#fff">Save Entry</button></div></div>`;
+  document.getElementById('modal-container').appendChild(m);
+}
+function addJournalEntry(button){
+  const title=titleCase(document.getElementById('journal-title').value||'Journal Entry');
+  const body=document.getElementById('journal-body').value.trim();
+  if(!body)return alert('Please write something before saving.');
+  let tags=[];
+  if(state.currentRole==='dom'){
+    tags=[...document.querySelectorAll('#jtag-picker .tag-on')].map(b=>b.dataset.tag);
+    const nv=(document.getElementById('jtag-new')?.value||'').trim().toLowerCase().replace(/^#/,'');
+    if(nv){ tags.push(nv); if(!state.journalTags.includes(nv)) state.journalTags.push(nv); }
+  }
+  state.journal.unshift({id:Date.now(),title,body,date:new Date().toISOString(),attachments:[],tags});
+  addNotification('journal','Journal saved',title,'journal'); saveState(); button.closest('.fixed').remove(); renderJournal(); renderDashboard();
+}
+function openJournalEntry(id){
+  if(state.currentRole!=='dom') return; /* sub cannot re-open */
+  const e=state.journal.find(x=>String(x.id)===String(id)); if(!e)return;
+  const tags=ensureArray(e.tags);
+  const allTags=[...new Set([...ensureArray(state.journalTags),...state.journal.flatMap(x=>ensureArray(x.tags))])];
+  const m=document.createElement('div');
+  m.innerHTML=`<div class="fixed inset-0 z-[200] flex items-end md:items-center justify-center" style="background:rgba(0,0,0,.95)" onclick="this.remove()"><article onclick="event.stopImmediatePropagation()" style="background:#151515;width:100%;max-width:44rem;max-height:94vh;overflow:auto;border-radius:2rem 2rem 0 0;padding:1.75rem;padding-bottom:max(1.75rem,env(safe-area-inset-bottom))"><button onclick="this.closest('[onclick]').remove()" style="float:right;font-size:1.5rem;color:var(--stone)">×</button><div style="font-size:.7rem;letter-spacing:3px;color:var(--gold)">${formatUKDate(e.date)} · ${formatUKTime(e.date)}</div><h1 class="heading-serif" style="font-size:2.5rem;margin:.75rem 0 1rem">${escapeText(titleCase(e.title))}</h1>
+  <div style="display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:1.25rem">${tags.map(t=>`<span class="pill" style="font-size:.7rem;padding:.3rem .8rem;color:var(--gold)">#${escapeText(t)} <span onclick="removeJournalTag(${e.id},'${escapeText(t)}')" style="cursor:pointer;margin-left:.2rem;color:var(--stone)">×</span></span>`).join('')}
+  <button onclick="promptAddJournalTag(${e.id})" class="pill tap" style="font-size:.7rem;padding:.3rem .8rem;color:var(--sage)"><i class="fa-solid fa-plus" style="margin-right:.2rem"></i>tag</button></div>
+  <div style="font-size:1rem;white-space:pre-wrap;line-height:1.8">${escapeText(e.body)}</div></article></div>`;
+  document.getElementById('modal-container').appendChild(m);
+}
+function promptAddJournalTag(id){
+  const t=(prompt('Add a tag for this entry:')||'').trim().toLowerCase().replace(/^#/,''); if(!t)return;
+  const e=state.journal.find(x=>String(x.id)===String(id)); if(!e)return;
+  e.tags=ensureArray(e.tags); if(!e.tags.includes(t)) e.tags.push(t);
+  if(!state.journalTags.includes(t)) state.journalTags.push(t);
+  saveState(); document.querySelectorAll('.fixed').forEach(x=>x.remove()); openJournalEntry(id); renderJournal();
+}
+function removeJournalTag(id,tag){
+  const e=state.journal.find(x=>String(x.id)===String(id)); if(!e)return;
+  e.tags=ensureArray(e.tags).filter(t=>t!==tag); saveState();
+  document.querySelectorAll('.fixed').forEach(x=>x.remove()); openJournalEntry(id); renderJournal();
+}
 
 /* ── Notifications ── */
 function derivedNotifications(){
@@ -567,6 +883,44 @@ function showEditSubProfileModal(){
 }
 function saveSubProfileEditor(button){ state.subProfile.name=document.getElementById('sub-name').value.trim()||state.subProfile.name; state.subTitle=state.subProfile.name; state.subProfile.photo=document.getElementById('sub-photo').value.trim()||DEFAULT_PHOTO; document.querySelectorAll('[data-measure]').forEach(el=>state.subProfile.measurements[el.dataset.measure]=el.value.trim()); document.querySelectorAll('[data-anatomy]').forEach(el=>state.subProfile.anatomy[el.dataset.anatomy]=el.value.trim()); addNotification('profile','Profile updated','Sub profile records were changed.','protocols'); saveState(); button.closest('.fixed').remove(); document.querySelectorAll('.fixed').forEach(m=>m.remove()); updateHeader(); activeProtocolPanel='records'; navigateToTab('protocols'); }
 
+/* ── Dom (James) profile ── */
+function domDetailRows(){ const d=state.domProfile.details; return [['Pronouns',d.pronouns],['Dynamic Since',d.dynamicStart],['Contact',d.contact],['Aftercare Style',d.aftercareStyle],['Expectations',d.expectations],['Hard No',d.hardNo]]; }
+function showDomProfileModal(){
+  const isDom=state.currentRole==='dom', p=state.domProfile, m=document.createElement('div');
+  m.innerHTML=`<div class="fixed inset-0 bg-black/90 z-[150] flex items-end md:items-center justify-center" onclick="this.remove()"><div onclick="event.stopImmediatePropagation()" class="glass" style="width:100%;max-width:34rem;max-height:92vh;overflow:auto;border-radius:2rem 2rem 0 0;padding:1.5rem;padding-bottom:max(1.5rem,env(safe-area-inset-bottom))">
+    <div style="display:flex;justify-content:space-between;margin-bottom:1.25rem"><div><div style="font-size:.65rem;letter-spacing:3px;color:var(--red)">DOMINANT PROFILE</div><div class="heading-serif" style="font-size:2.25rem;margin-top:.2rem">${escapeText(p.name)}</div><div style="font-size:.8rem;color:var(--stone);margin-top:.2rem">${escapeText(p.notes)}</div></div><button onclick="this.closest('.fixed').remove()" style="font-size:1.5rem;color:var(--stone)">×</button></div>
+    <div class="card" style="padding:1.25rem"><div style="display:flex;gap:1rem"><img src="${escapeText(p.photo)}" style="width:7rem;height:8.5rem;object-fit:cover;border-radius:1.5rem" alt="Dom profile"><div><div class="heading-serif" style="font-size:1.5rem">${escapeText(p.name)}</div><div style="font-size:.8rem;color:var(--red)">${escapeText(p.role)} · ${escapeText(p.honorific)}</div><span class="pill" style="display:inline-flex;align-items:center;gap:.3rem;font-size:.7rem;padding:.3rem .7rem;margin-top:.6rem"><i class="fa-solid ${isDom?'fa-pen':'fa-lock'}"></i>${isDom?'You can edit this':'View only'}</span></div></div></div>
+    <div class="card" style="padding:1.25rem;margin-top:.85rem"><div style="font-weight:600;margin-bottom:.85rem">Details</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem">${domDetailRows().map(([k,v])=>`<div class="subtle-card" style="padding:.7rem"><div style="font-size:.6rem;color:var(--stone);text-transform:uppercase;letter-spacing:1px">${k}</div><div style="font-size:.85rem;font-weight:600;margin-top:.2rem">${escapeText(v||'—')}</div></div>`).join('')}</div></div>
+    ${isDom?`<button onclick="showEditDomProfileModal()" style="width:100%;margin-top:1.25rem;padding:.85rem;background:var(--red);border-radius:1rem;color:#fff">Edit My Profile</button>`:''}
+  </div></div>`;
+  document.getElementById('modal-container').appendChild(m);
+}
+function showEditDomProfileModal(){
+  if(state.currentRole!=='dom')return;
+  const p=state.domProfile, d=p.details, m=document.createElement('div');
+  m.innerHTML=`<div class="fixed inset-0 bg-black/95 z-[220] flex items-end md:items-center justify-center" onclick="this.remove()"><div onclick="event.stopImmediatePropagation()" class="glass" style="width:100%;max-width:34rem;max-height:94vh;overflow:auto;border-radius:2rem 2rem 0 0;padding:1.5rem;padding-bottom:max(1.5rem,env(safe-area-inset-bottom))">
+    <div style="display:flex;justify-content:space-between;margin-bottom:1.25rem"><div style="font-size:1.25rem;font-weight:600">Edit My Profile</div><button onclick="this.closest('.fixed').remove()" style="font-size:1.5rem;color:var(--stone)">×</button></div>
+    <div style="display:flex;flex-direction:column;gap:.75rem">
+      <input id="dom-name" class="beautiful-input" style="width:100%;padding:.85rem 1rem;border-radius:1rem" value="${escapeText(p.name)}" placeholder="Name">
+      <input id="dom-honorific" class="beautiful-input" style="width:100%;padding:.85rem 1rem;border-radius:1rem" value="${escapeText(p.honorific)}" placeholder="Honorific (e.g. Sir)">
+      <input id="dom-photo" class="beautiful-input" style="width:100%;padding:.85rem 1rem;border-radius:1rem" value="${escapeText(p.photo)}" placeholder="Photo URL">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem">${Object.entries(d).map(([key,val])=>`<label style="font-size:.62rem;color:rgba(198,166,66,.7);text-transform:uppercase;letter-spacing:1px">${key.replace(/[A-Z]/g,' $&')}<input data-domdetail="${key}" class="beautiful-input" style="width:100%;padding:.7rem .85rem;border-radius:.85rem;margin-top:.2rem;display:block" value="${escapeText(val||'')}"></label>`).join('')}</div>
+    </div>
+    <button onclick="saveDomProfileEditor(this)" style="width:100%;margin-top:1.25rem;padding:.85rem;background:var(--red);border-radius:1rem;color:#fff">Save</button>
+  </div></div>`;
+  document.getElementById('modal-container').appendChild(m);
+}
+function saveDomProfileEditor(button){
+  state.domProfile.name=document.getElementById('dom-name').value.trim()||state.domProfile.name;
+  state.domTitle=state.domProfile.name;
+  state.domProfile.honorific=document.getElementById('dom-honorific').value.trim()||state.domProfile.honorific;
+  state.domProfile.photo=document.getElementById('dom-photo').value.trim()||state.domProfile.photo;
+  document.querySelectorAll('[data-domdetail]').forEach(el=>state.domProfile.details[el.dataset.domdetail]=el.value.trim());
+  state.subProfile.dominant=state.domProfile.name;
+  saveState(); document.querySelectorAll('.fixed').forEach(x=>x.remove()); updateHeader(); renderSettings();
+  showToast('Profile saved','success');
+}
+
 /* ── Limits & Rules ── */
 function showAddLimitModal(){ const m=document.createElement('div'); m.innerHTML=`<div class="fixed inset-0 bg-black/90 z-[150] flex items-end md:items-center justify-center" onclick="this.remove()"><div onclick="event.stopImmediatePropagation()" class="glass" style="width:100%;max-width:28rem;border-radius:2rem 2rem 0 0;padding:1.5rem;padding-bottom:max(1.5rem,env(safe-area-inset-bottom))"><div style="font-size:1.25rem;font-weight:600;margin-bottom:1.25rem">Add Boundary Or Preference</div><select id="limit-category" class="beautiful-input" style="width:100%;padding:.85rem 1rem;border-radius:1rem;margin-bottom:.75rem">${LIMIT_GROUPS.map(([key,label])=>`<option value="${key}">${label}</option>`).join('')}</select><input id="limit-text" class="beautiful-input" style="width:100%;padding:.85rem 1rem;border-radius:1rem" placeholder="Describe It"><button onclick="addLimit(this)" style="width:100%;margin-top:1.25rem;padding:.85rem;background:var(--red);border-radius:1rem;color:#fff">Add</button></div></div>`; document.getElementById('modal-container').appendChild(m); }
 function addLimit(button){ const cat=document.getElementById('limit-category').value, text=titleCase(document.getElementById('limit-text').value||''); if(!text)return alert('Please describe it.'); if(!Array.isArray(state.limits[cat]))state.limits[cat]=[]; state.limits[cat].push(text); saveState(); button.closest('.fixed').remove(); renderProtocols(); }
@@ -577,7 +931,13 @@ function saveSection(section,button){ state.rules[section]=document.getElementBy
 function showSettings(){ navigateToTab('settings'); }
 function renderSettings(){
   const tab=document.getElementById('tab-settings'); if(!tab)return;
-  tab.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1.5rem"><div><div class="heading-serif" style="font-size:2.5rem">Settings</div><div style="font-size:.8rem;color:var(--stone);margin-top:.25rem">Data, reset and app controls.</div></div><button onclick="switchRole()" class="pill tap" style="font-size:.72rem;padding:.4rem .85rem">Lock</button></div><section class="card" style="padding:1.25rem;margin-bottom:1.25rem"><div style="font-weight:600;font-size:1.1rem;margin-bottom:.85rem">Data Management</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem"><button onclick="exportSystemBackup()" class="subtle-card tap" style="padding:1rem;text-align:left;display:block;cursor:pointer"><i class="fa-solid fa-download" style="color:var(--gold)"></i><div style="font-weight:600;margin-top:.5rem;font-size:.9rem">Export Backup</div><div style="font-size:.75rem;color:var(--stone)">JSON download</div></button><label class="subtle-card tap" style="padding:1rem;text-align:left;display:block;cursor:pointer"><i class="fa-solid fa-upload" style="color:var(--blue)"></i><div style="font-weight:600;margin-top:.5rem;font-size:.9rem">Restore Backup</div><div style="font-size:.75rem;color:var(--stone)">Import JSON</div><input type="file" accept="application/json" style="display:none" onchange="restoreSystemBackup(this)"></label></div></section><section class="card" style="padding:1.25rem;margin-bottom:1.25rem"><div style="font-weight:600;font-size:1.1rem;margin-bottom:.85rem">Reset From Scratch</div><div style="display:flex;flex-direction:column;gap:.5rem">${[['demo','Reset demo data'],['profile','Reset profile'],['protocols','Reset protocols'],['tasks','Reset tasks'],['rewards','Reset rewards'],['notifications','Reset notifications'],['local','Clear local device cache']].map(([key,label])=>`<button onclick="resetSection('${key}')" class="tap" style="display:flex;justify-content:space-between;align-items:center;padding:.85rem 1rem;background:rgba(255,255,255,.05);border-radius:1rem;text-align:left"><span>${label}</span><i class="fa-solid fa-rotate-left" style="color:var(--stone)"></i></button>`).join('')}</div></section><section class="card" style="padding:1.25rem;border:1px solid rgba(143,17,24,.4)"><div style="font-weight:600;font-size:1.1rem;color:var(--red);margin-bottom:.5rem">Danger Zone</div><div style="font-size:.85rem;color:var(--stone);margin-bottom:1rem">This backs up the current system locally, then resets all shared app data. Requires typed confirmation.</div><button onclick="resetEverything()" style="width:100%;padding:.85rem;background:var(--red);border-radius:1rem;color:#fff">Reset Everything</button></section>`;
+  const isDom=state.currentRole==='dom';
+  tab.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1.5rem"><div><div class="heading-serif" style="font-size:2.5rem">Settings</div><div style="font-size:.8rem;color:var(--stone);margin-top:.25rem">Profiles, data, reset and app controls.</div></div><button onclick="switchRole()" class="pill tap" style="font-size:.72rem;padding:.4rem .85rem">Lock</button></div>
+  <section class="card" style="padding:1.25rem;margin-bottom:1.25rem"><div style="font-weight:600;font-size:1.1rem;margin-bottom:.85rem">Profiles</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+    <button onclick="showDomProfileModal()" class="subtle-card tap" style="padding:1rem;text-align:left;display:block;cursor:pointer"><img src="${escapeText(state.domProfile.photo)}" style="width:2.5rem;height:2.5rem;border-radius:.9rem;object-fit:cover"><div style="font-weight:600;margin-top:.5rem;font-size:.9rem">James (Dominant)</div><div style="font-size:.72rem;color:var(--stone)">${isDom?'View &amp; edit':'View only'}</div></button>
+    <button onclick="showProfileModal()" class="subtle-card tap" style="padding:1rem;text-align:left;display:block;cursor:pointer"><img src="${escapeText(state.subProfile.photo||DEFAULT_PHOTO)}" style="width:2.5rem;height:2.5rem;border-radius:.9rem;object-fit:cover"><div style="font-weight:600;margin-top:.5rem;font-size:.9rem">Jacob (Submissive)</div><div style="font-size:.72rem;color:var(--stone)">${isDom?'James edits':'View only'}</div></button>
+  </div></section>
+  <section class="card" style="padding:1.25rem;margin-bottom:1.25rem"><div style="font-weight:600;font-size:1.1rem;margin-bottom:.85rem">Data Management</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem"><button onclick="exportSystemBackup()" class="subtle-card tap" style="padding:1rem;text-align:left;display:block;cursor:pointer"><i class="fa-solid fa-download" style="color:var(--gold)"></i><div style="font-weight:600;margin-top:.5rem;font-size:.9rem">Export Backup</div><div style="font-size:.75rem;color:var(--stone)">JSON download</div></button><label class="subtle-card tap" style="padding:1rem;text-align:left;display:block;cursor:pointer"><i class="fa-solid fa-upload" style="color:var(--blue)"></i><div style="font-weight:600;margin-top:.5rem;font-size:.9rem">Restore Backup</div><div style="font-size:.75rem;color:var(--stone)">Import JSON</div><input type="file" accept="application/json" style="display:none" onchange="restoreSystemBackup(this)"></label></div></section><section class="card" style="padding:1.25rem;margin-bottom:1.25rem"><div style="font-weight:600;font-size:1.1rem;margin-bottom:.85rem">Reset From Scratch</div><div style="display:flex;flex-direction:column;gap:.5rem">${[['demo','Reset demo data'],['profile','Reset profile'],['protocols','Reset protocols'],['tasks','Reset tasks'],['rewards','Reset rewards'],['notifications','Reset notifications'],['local','Clear local device cache']].map(([key,label])=>`<button onclick="resetSection('${key}')" class="tap" style="display:flex;justify-content:space-between;align-items:center;padding:.85rem 1rem;background:rgba(255,255,255,.05);border-radius:1rem;text-align:left"><span>${label}</span><i class="fa-solid fa-rotate-left" style="color:var(--stone)"></i></button>`).join('')}</div></section><section class="card" style="padding:1.25rem;border:1px solid rgba(143,17,24,.4)"><div style="font-weight:600;font-size:1.1rem;color:var(--red);margin-bottom:.5rem">Danger Zone</div><div style="font-size:.85rem;color:var(--stone);margin-bottom:1rem">This backs up the current system locally, then resets all shared app data. Requires typed confirmation.</div><button onclick="resetEverything()" style="width:100%;padding:.85rem;background:var(--red);border-radius:1rem;color:#fff">Reset Everything</button></section>`;
 }
 function exportSystemBackup(){ const blob=new Blob([safeJson(state)],{type:'application/json'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='the-system-backup-'+new Date().toISOString().slice(0,10)+'.json'; a.click(); URL.revokeObjectURL(url); }
 function restoreSystemBackup(input){ const file=input.files&&input.files[0]; if(!file)return; const reader=new FileReader(); reader.onload=()=>{ try{ const next=JSON.parse(reader.result); state={...defaultSystemState(state.currentRole),...next,currentRole:state.currentRole}; migrateEnhancedState(); saveState(); showToast('Backup Restored','success'); navigateToTab('dashboard'); }catch(err){ alert('Backup file is not valid JSON.'); } }; reader.readAsText(file); }
