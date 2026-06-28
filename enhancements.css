@@ -118,6 +118,11 @@ button{touch-action:manipulation}
 .seg-btn i{font-size:.8rem}
 .seg-btn.seg-on{background:var(--red-2);border-color:var(--red);color:#fff;box-shadow:0 6px 18px rgba(143,17,24,.3)}
 
+/* ===== ELECTRO SLIDERS ===== */
+.electro-slider{height:.4rem;margin:.15rem 0 .1rem}
+.electro-slider::-webkit-slider-thumb{border-color:var(--ecol,var(--red))}
+.electro-slider::-moz-range-thumb{border-color:var(--ecol,var(--red))}
+
 /* ===== REDACTED RECORD SHIMMER ===== */
 .redact-shimmer{background:linear-gradient(100deg,rgba(255,255,255,.04) 30%,rgba(255,255,255,.13) 50%,rgba(255,255,255,.04) 70%);background-size:200% 100%;animation:redactShimmer 1.8s linear infinite;border:1px solid rgba(255,255,255,.08)}
 @keyframes redactShimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
