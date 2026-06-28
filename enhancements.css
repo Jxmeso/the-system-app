@@ -118,6 +118,10 @@ button{touch-action:manipulation}
 .seg-btn i{font-size:.8rem}
 .seg-btn.seg-on{background:var(--red-2);border-color:var(--red);color:#fff;box-shadow:0 6px 18px rgba(143,17,24,.3)}
 
+/* ===== REDACTED RECORD SHIMMER ===== */
+.redact-shimmer{background:linear-gradient(100deg,rgba(255,255,255,.04) 30%,rgba(255,255,255,.13) 50%,rgba(255,255,255,.04) 70%);background-size:200% 100%;animation:redactShimmer 1.8s linear infinite;border:1px solid rgba(255,255,255,.08)}
+@keyframes redactShimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
 /* ===== LIVE CAPTURE (auto video/voice) ===== */
 .cap-big{font-size:5rem!important;animation:capPop .85s ease}
 @keyframes capPop{0%{transform:scale(.4);opacity:0}40%{transform:scale(1.1);opacity:1}100%{transform:scale(1)}}
@@ -125,6 +129,10 @@ button{touch-action:manipulation}
 @keyframes capFlash{0%,100%{box-shadow:inset 0 0 50px 14px rgba(207,51,60,.5)}50%{box-shadow:inset 0 0 90px 34px rgba(207,51,60,.95)}}
 .cap-thanks{font-family:'Playfair Display',Georgia,serif;font-size:2.4rem;font-weight:700;color:var(--ivory);text-align:center;animation:capThanks .6s ease;text-shadow:0 0 30px rgba(207,51,60,.5)}
 @keyframes capThanks{0%{opacity:0;transform:scale(.85)}100%{opacity:1;transform:scale(1)}}
+.cap-praise{font-family:'Playfair Display',Georgia,serif;font-size:1.35rem;font-weight:600;color:var(--rose);text-align:center;margin-top:.85rem;max-width:20rem;line-height:1.25;animation:capThanks .8s ease .2s both}
+#cap-flash.cap-flash-blue{box-shadow:inset 0 0 80px 30px rgba(49,91,122,.9);animation:capFlashBlue .5s ease-in-out infinite}
+@keyframes capFlashBlue{0%,100%{box-shadow:inset 0 0 50px 16px rgba(49,91,122,.6)}50%{box-shadow:inset 0 0 95px 38px rgba(63,120,166,1)}}
+.cap-surprise{font-family:'Playfair Display',Georgia,serif;font-size:1.8rem;font-weight:700;color:#cfe3f5;text-align:center;max-width:20rem;text-shadow:0 0 26px rgba(49,91,122,.8);animation:capThanks .5s ease}
 
 /* ===== VOICE WAVE ===== */
 .voice-wave{display:flex;align-items:center;justify-content:center;gap:.3rem;height:3rem;--vc:var(--blue)}
