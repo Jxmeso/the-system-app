@@ -6,7 +6,7 @@
 
 /* ── Version gate: forces one clean navigation when new build detected ── */
 (function(){
-  var BUILD='v5-20260628-09';
+  var BUILD='v5-20260628-10';
   try{
     if(localStorage.getItem('_sys_build')!==BUILD){
       try{localStorage.setItem('_sys_build',BUILD);}catch(_){}
@@ -535,10 +535,137 @@ function renderTasks(){
 
 /* ── Task detail modal ── */
 function showTaskDetailById(id){ const t=state.tasks.find(x=>String(x.id)===String(id)); if(t) showTaskDetail(t); }
-function evidenceInput(type){
-  if(type==='text') return `<label style="display:block"><span style="font-size:.7rem;color:rgba(198,166,66,.7)">TEXT REPORT</span><textarea id="evidence-text" rows="4" class="beautiful-input" style="width:100%;padding:.85rem 1rem;border-radius:1rem;margin-top:.35rem;resize:none" placeholder="Write Your Report..."></textarea></label>`;
-  const label=titleCase(type==='voice'?'Voice Note':type); const accept=type==='photo'?'image/*':type==='video'?'video/*':type==='voice'?'audio/*':'*/*';
-  return `<label style="display:block"><span style="font-size:.7rem;color:rgba(198,166,66,.7)">${label.toUpperCase()}</span><input id="evidence-${type}" type="file" accept="${accept}" class="beautiful-input" style="width:100%;padding:.85rem 1rem;border-radius:1rem;margin-top:.35rem;font-size:.8rem"></label>`;
+/* ════════════ PHASE 2: LIVE EVIDENCE ENGINE ════════════
+   No uploads, no camera roll, no file picker. Everything Jacob submits is
+   captured live inside the app: photos via shutter, video for an exact
+   duration set by James, voice notes with a minimum length, text reports
+   with word limits and no paste. ───────────────────────────────────── */
+var _pend=null;            /* pending captured blobs for the open task */
+var _cap={stream:null,recorder:null,chunks:[],timer:null,startedAt:0};
+function _wordCount(s){ return (String(s||'').trim().match(/\S+/g)||[]).length; }
+function taskReqs(task){ return (task&&task.evidenceReqs)||{}; }
+
+function evidenceCaptureControls(task){
+  const reqs=taskReqs(task);
+  const required=ensureArray(task.requiredEvidence);
+  _pend={taskId:task.id,photo:[],video:[],voice:[]};
+  return `<div id="evidence-controls" style="display:flex;flex-direction:column;gap:.85rem">${required.map(type=>evidenceControl(task,type)).join('')||`<div style="font-size:.85rem;opacity:.6">No Evidence Required.</div>`}</div>`;
+}
+function evidenceControl(task,type){
+  const reqs=taskReqs(task);
+  if(type==='text'){
+    const min=reqs.text&&reqs.text.minWords||0, max=reqs.text&&reqs.text.maxWords||0, spell=!!(reqs.text&&reqs.text.spellcheck);
+    return `<div class="glass" style="padding:1rem;border-radius:1rem">
+      <div style="font-size:.65rem;color:rgba(198,166,66,.7);letter-spacing:1px;margin-bottom:.4rem">TEXT REPORT${min||max?` · ${min||0}${max?'–'+max:'+'} words`:''}</div>
+      <textarea id="evidence-text" rows="5" spellcheck="${spell}" oninput="updateWordCount(${task.id})" onpaste="return false" oncopy="return false" oncut="return false" class="beautiful-input no-paste" style="width:100%;padding:.85rem 1rem;border-radius:1rem;resize:none" placeholder="Type your report — pasting is disabled."></textarea>
+      <div id="wc-${task.id}" style="font-size:.7rem;color:var(--stone);margin-top:.35rem">0 words</div>
+    </div>`;
+  }
+  if(type==='photo'){
+    const min=reqs.photo&&reqs.photo.min||1;
+    return `<div class="glass" style="padding:1rem;border-radius:1rem">
+      <div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:.65rem;color:rgba(198,166,66,.7);letter-spacing:1px"><i class="fa-solid fa-camera" style="margin-right:.4rem"></i>PHOTO · need ${min}</div><span id="cap-count-photo" style="font-size:.72rem;color:var(--sage)">0/${min}</span></div>
+      <div id="cap-thumbs-photo" style="display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.6rem"></div>
+      <button onclick="openCapture('photo',${task.id})" class="tap" style="width:100%;margin-top:.6rem;padding:.7rem;background:var(--blue-2);border-radius:.85rem;color:#fff;font-size:.85rem"><i class="fa-solid fa-camera" style="margin-right:.4rem"></i>Open Camera</button>
+    </div>`;
+  }
+  if(type==='video'){
+    const secs=reqs.video&&reqs.video.seconds||15;
+    return `<div class="glass" style="padding:1rem;border-radius:1rem">
+      <div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:.65rem;color:rgba(198,166,66,.7);letter-spacing:1px"><i class="fa-solid fa-video" style="margin-right:.4rem"></i>VIDEO · exactly ${secs}s</div><span id="cap-count-video" style="font-size:.72rem;color:var(--sage)">Not recorded</span></div>
+      <button onclick="openCapture('video',${task.id})" class="tap" style="width:100%;margin-top:.6rem;padding:.7rem;background:var(--blue-2);border-radius:.85rem;color:#fff;font-size:.85rem"><i class="fa-solid fa-circle-dot" style="margin-right:.4rem"></i>Record ${secs}s Video</button>
+    </div>`;
+  }
+  if(type==='voice'){
+    const secs=reqs.voice&&reqs.voice.minSeconds||10;
+    return `<div class="glass" style="padding:1rem;border-radius:1rem">
+      <div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:.65rem;color:rgba(198,166,66,.7);letter-spacing:1px"><i class="fa-solid fa-microphone" style="margin-right:.4rem"></i>VOICE NOTE · min ${secs}s</div><span id="cap-count-voice" style="font-size:.72rem;color:var(--sage)">Not recorded</span></div>
+      <button onclick="openCapture('voice',${task.id})" class="tap" style="width:100%;margin-top:.6rem;padding:.7rem;background:var(--blue-2);border-radius:.85rem;color:#fff;font-size:.85rem"><i class="fa-solid fa-microphone" style="margin-right:.4rem"></i>Record Voice Note</button>
+    </div>`;
+  }
+  return '';
+}
+function updateWordCount(taskId){
+  const ta=document.getElementById('evidence-text'); const el=document.getElementById('wc-'+taskId); if(!ta||!el)return;
+  const task=state.tasks.find(t=>String(t.id)===String(taskId)); const r=taskReqs(task).text||{};
+  const n=_wordCount(ta.value); let msg=n+' word'+(n===1?'':'s');
+  if(r.minWords&&n<r.minWords) msg+=` · need ${r.minWords}`;
+  if(r.maxWords&&n>r.maxWords) msg+=` · over by ${n-r.maxWords}`;
+  el.textContent=msg;
+  el.style.color=(r.minWords&&n<r.minWords)||(r.maxWords&&n>r.maxWords)?'var(--red)':'var(--stone)';
+}
+/* ── Live capture modal ── */
+function openCapture(type,taskId){
+  const task=state.tasks.find(t=>String(t.id)===String(taskId)); const reqs=taskReqs(task);
+  if(!_pend||String(_pend.taskId)!==String(taskId)) _pend={taskId,photo:[],video:[],voice:[]};
+  const m=document.createElement('div'); m.id='capture-modal';
+  m.innerHTML=`<div class="fixed inset-0 z-[260]" style="background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:1rem">
+    <video id="cap-video" autoplay muted playsinline style="width:100%;max-width:30rem;border-radius:1.25rem;background:#111;${type==='voice'?'display:none':''}"></video>
+    ${type==='voice'?`<div id="cap-voicewrap" style="width:14rem;height:14rem;border-radius:999px;background:radial-gradient(circle,rgba(143,17,24,.25),transparent);display:flex;align-items:center;justify-content:center"><i class="fa-solid fa-microphone" style="font-size:4rem;color:var(--rose)"></i></div>`:''}
+    <div id="cap-timer" style="font-size:1.6rem;font-weight:700;color:#fff;margin-top:1rem;font-variant-numeric:tabular-nums">—</div>
+    <div id="cap-hint" style="font-size:.8rem;color:var(--stone);margin-top:.25rem;text-align:center"></div>
+    <div id="cap-actions" style="display:flex;gap:1rem;margin-top:1.5rem"></div>
+    <button onclick="cancelCapture()" style="margin-top:1.5rem;font-size:.8rem;color:var(--stone)">Cancel</button>
+  </div>`;
+  document.getElementById('modal-container').appendChild(m);
+  startCaptureFlow(type,taskId,reqs);
+}
+async function startCaptureFlow(type,taskId,reqs){
+  const actions=document.getElementById('cap-actions'), hint=document.getElementById('cap-hint'), timer=document.getElementById('cap-timer');
+  try{
+    const constraints=type==='voice'?{audio:true}:{video:{facingMode:'environment'},audio:type==='video'};
+    _cap.stream=await navigator.mediaDevices.getUserMedia(constraints);
+  }catch(err){ hint.textContent='Camera / microphone permission is required.'; actions.innerHTML=`<button onclick="cancelCapture()" class="tap" style="padding:.7rem 1.4rem;background:var(--red);border-radius:1rem;color:#fff">Close</button>`; return; }
+  if(type!=='voice'){ const v=document.getElementById('cap-video'); v.srcObject=_cap.stream; }
+  if(type==='photo'){
+    timer.textContent=''; hint.textContent='Tap the shutter for each photo.';
+    actions.innerHTML=`<button onclick="snapPhoto(${taskId})" class="tap" style="width:4.5rem;height:4.5rem;border-radius:999px;background:#fff;border:4px solid var(--red)"></button><button onclick="finishCapture()" class="tap" style="padding:.7rem 1.4rem;background:var(--sage-2);border-radius:1rem;color:#fff">Done</button>`;
+  } else if(type==='video'){
+    const secs=reqs.video&&reqs.video.seconds||15;
+    timer.textContent=secs+'s'; hint.textContent=`Records exactly ${secs}s and stops automatically.`;
+    actions.innerHTML=`<button onclick="startTimedRecord(${taskId},'video',${secs})" class="tap" style="padding:.85rem 1.6rem;background:var(--red);border-radius:1rem;color:#fff"><i class="fa-solid fa-circle-dot" style="margin-right:.4rem"></i>Start</button>`;
+  } else if(type==='voice'){
+    const secs=reqs.voice&&reqs.voice.minSeconds||10;
+    timer.textContent='0s'; hint.textContent=`Record at least ${secs}s. You can't stop early.`;
+    actions.innerHTML=`<button onclick="startVoiceRecord(${taskId},${secs})" class="tap" style="padding:.85rem 1.6rem;background:var(--red);border-radius:1rem;color:#fff"><i class="fa-solid fa-microphone" style="margin-right:.4rem"></i>Start</button>`;
+  }
+}
+function snapPhoto(taskId){
+  const v=document.getElementById('cap-video'); if(!v||!v.videoWidth)return;
+  const c=document.createElement('canvas'); c.width=v.videoWidth; c.height=v.videoHeight;
+  c.getContext('2d').drawImage(v,0,0);
+  c.toBlob(blob=>{ if(!blob)return; _pend.photo.push(blob); const t=document.getElementById('cap-timer'); if(t)t.textContent=_pend.photo.length+' captured'; },'image/jpeg',0.9);
+}
+function startTimedRecord(taskId,type,secs){
+  if(!_cap.stream) return;
+  const actions=document.getElementById('cap-actions'), timer=document.getElementById('cap-timer'), hint=document.getElementById('cap-hint');
+  _cap.chunks=[]; _cap.recorder=new MediaRecorder(_cap.stream);
+  _cap.recorder.ondataavailable=e=>{ if(e.data.size) _cap.chunks.push(e.data); };
+  _cap.recorder.onstop=()=>{ const blob=new Blob(_cap.chunks,{type:'video/webm'}); _pend.video=[blob]; finishCapture(); };
+  _cap.recorder.start(); let left=secs; timer.textContent=left+'s'; hint.textContent='Recording…';
+  actions.innerHTML=`<div style="color:var(--red);font-weight:700"><i class="fa-solid fa-circle" style="margin-right:.4rem;animation:pulseZone 1s infinite"></i>REC</div>`;
+  _cap.timer=setInterval(()=>{ left--; timer.textContent=left+'s'; if(left<=0){ clearInterval(_cap.timer); try{_cap.recorder.stop();}catch(_){} } },1000);
+}
+function startVoiceRecord(taskId,minSecs){
+  if(!_cap.stream) return;
+  const actions=document.getElementById('cap-actions'), timer=document.getElementById('cap-timer'), hint=document.getElementById('cap-hint');
+  _cap.chunks=[]; _cap.recorder=new MediaRecorder(_cap.stream);
+  _cap.recorder.ondataavailable=e=>{ if(e.data.size) _cap.chunks.push(e.data); };
+  _cap.recorder.onstop=()=>{ const blob=new Blob(_cap.chunks,{type:'audio/webm'}); _pend.voice=[blob]; finishCapture(); };
+  _cap.recorder.start(); let el=0; _cap.startedAt=Date.now(); timer.textContent='0s'; hint.textContent='Recording…';
+  actions.innerHTML=`<button id="cap-stop" disabled class="tap" style="padding:.85rem 1.6rem;background:rgba(255,255,255,.1);border-radius:1rem;color:var(--stone)">Stop (${minSecs}s)</button>`;
+  _cap.timer=setInterval(()=>{ el++; timer.textContent=el+'s'; const stop=document.getElementById('cap-stop'); if(el>=minSecs&&stop){ stop.disabled=false; stop.style.background='var(--sage-2)'; stop.style.color='#fff'; stop.textContent='Stop'; stop.onclick=()=>{ clearInterval(_cap.timer); try{_cap.recorder.stop();}catch(_){} }; } },1000);
+}
+function _stopStream(){ if(_cap.stream){ _cap.stream.getTracks().forEach(t=>t.stop()); _cap.stream=null; } if(_cap.timer){ clearInterval(_cap.timer); _cap.timer=null; } }
+function cancelCapture(){ try{ if(_cap.recorder&&_cap.recorder.state==='recording') _cap.recorder.stop(); }catch(_){} _stopStream(); _cap.recorder=null; const m=document.getElementById('capture-modal'); if(m)m.remove(); }
+function finishCapture(){ _stopStream(); _cap.recorder=null; const m=document.getElementById('capture-modal'); if(m)m.remove(); refreshEvidenceCounts(); }
+function refreshEvidenceCounts(){
+  if(!_pend)return;
+  const task=state.tasks.find(t=>String(t.id)===String(_pend.taskId)); const reqs=taskReqs(task);
+  const pc=document.getElementById('cap-count-photo'); if(pc) pc.textContent=_pend.photo.length+'/'+((reqs.photo&&reqs.photo.min)||1);
+  const th=document.getElementById('cap-thumbs-photo'); if(th) th.innerHTML=_pend.photo.map(b=>`<img src="${URL.createObjectURL(b)}" style="width:3rem;height:3rem;object-fit:cover;border-radius:.5rem">`).join('');
+  const vc=document.getElementById('cap-count-video'); if(vc&&_pend.video.length) vc.textContent='Recorded ✓';
+  const oc=document.getElementById('cap-count-voice'); if(oc&&_pend.voice.length) oc.textContent='Recorded ✓';
 }
 function renderSubmittedEvidence(task){
   const items=task.evidence||[]; if(!items.length)return`<div style="font-size:.85rem;opacity:.6">No Evidence Submitted.</div>`;
@@ -554,37 +681,94 @@ function renderSubmittedEvidence(task){
   }).join('');
 }
 function showTaskDetail(task){
-  const isSub=state.currentRole==='sub', required=ensureArray(task.requiredEvidence);
+  const isDom=state.currentRole==='dom', isSub=!isDom;
+  const redo=task.attempt&&task.attempt>1;
+  let body;
+  if(task.status==='completed'){
+    body=`<div style="gap:.75rem;display:flex;flex-direction:column"><div style="font-size:.65rem;color:#34d399;letter-spacing:3px">EVIDENCE${task.reviewed?' · REVIEWED':' · AWAITING JAMES'}</div>${renderSubmittedEvidence(task)}</div>${isDom?domReviewControls(task):''}`;
+  } else if(isSub){
+    body=`${redo?`<div class="card" style="padding:.85rem 1rem;border-left:3px solid var(--red);margin-bottom:1rem"><div style="font-size:.7rem;color:var(--red);font-weight:700">SENT BACK BY JAMES — ATTEMPT ${task.attempt}</div>${task.redoReason?`<div style="font-size:.8rem;color:var(--stone);margin-top:.25rem">${escapeText(task.redoReason)}</div>`:''}</div>`:''}${evidenceCaptureControls(task)}<button onclick="submitTaskEvidence(${task.id},this)" style="width:100%;margin-top:1.5rem;padding:.85rem;background:#064e3b;border-radius:1rem;color:#fff">Submit Evidence to James</button>`;
+  } else {
+    body=`<div style="font-size:.85rem;color:rgba(198,166,66,.7);margin-bottom:1rem">Awaiting Jacob's evidence.</div>${domPendingControls(task)}`;
+  }
   const modal=document.createElement('div');
-  modal.innerHTML=`<div class="fixed inset-0 bg-black/90 z-[100] flex items-end md:items-center justify-center" onclick="this.remove()"><div onclick="event.stopImmediatePropagation()" class="glass" style="width:100%;max-width:34rem;max-height:92vh;overflow:auto;border-radius:2rem 2rem 0 0;padding:1.5rem;padding-bottom:max(1.5rem,env(safe-area-inset-bottom))"><div style="display:flex;justify-content:space-between;gap:1rem;margin-bottom:1.25rem"><div><div style="font-size:1.4rem;font-weight:600">${escapeText(titleCase(task.title))}</div><div style="font-size:.7rem;color:rgba(198,166,66,.7);margin-top:.2rem">${formatUKDate(dueDateFor(task))} at ${formatUKTime(dueDateFor(task))}</div></div><button onclick="this.closest('.fixed').remove()" style="font-size:1.5rem;color:var(--stone)">×</button></div><div style="font-size:.9rem;margin-bottom:1.5rem;white-space:pre-wrap">${escapeText(task.desc||'No additional instructions.')}</div>${task.status==='completed'?`<div style="gap:.75rem;display:flex;flex-direction:column"><div style="font-size:.65rem;color:#34d399;letter-spacing:3px">COMPLETED</div>${renderSubmittedEvidence(task)}</div>`:isSub?`<div style="display:flex;flex-direction:column;gap:.75rem">${required.map(t=>evidenceInput(t)).join('')||`<div style="font-size:.85rem;opacity:.6">No Evidence Required.</div>`}</div><button onclick="submitTaskEvidence(${task.id},this)" style="width:100%;margin-top:1.5rem;padding:.85rem;background:#064e3b;border-radius:1rem;color:#fff">Submit Evidence to James</button>`:`<div style="font-size:.85rem;color:rgba(198,166,66,.7)">Awaiting Jacob's evidence.</div>`}</div></div>`;
+  modal.innerHTML=`<div class="fixed inset-0 bg-black/90 z-[100] flex items-end md:items-center justify-center" onclick="this.remove()"><div onclick="event.stopImmediatePropagation()" class="glass" style="width:100%;max-width:34rem;max-height:92vh;overflow:auto;border-radius:2rem 2rem 0 0;padding:1.5rem;padding-bottom:max(1.5rem,env(safe-area-inset-bottom))"><div style="display:flex;justify-content:space-between;gap:1rem;margin-bottom:1.25rem"><div><div style="font-size:1.4rem;font-weight:600">${escapeText(titleCase(task.title))}</div><div style="font-size:.7rem;color:rgba(198,166,66,.7);margin-top:.2rem">${formatUKDate(dueDateFor(task))} at ${formatUKTime(dueDateFor(task))}</div></div><button onclick="this.closest('.fixed').remove()" style="font-size:1.5rem;color:var(--stone)">×</button></div><div style="font-size:.9rem;margin-bottom:1.5rem;white-space:pre-wrap">${escapeText(task.desc||'No additional instructions.')}</div>${body}</div></div>`;
   document.getElementById('modal-container').appendChild(modal);
+  if(task.status!=='completed'&&isSub) setTimeout(()=>updateWordCount(task.id),0);
+}
+function domPendingControls(task){
+  return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">
+    <button onclick="revokeTask(${task.id},this)" class="tap" style="padding:.7rem;background:rgba(255,255,255,.06);border-radius:.85rem;font-size:.8rem">Revoke (silent)</button>
+    <button onclick="deleteTask(${task.id},this)" class="tap" style="padding:.7rem;background:rgba(143,17,24,.2);border-radius:.85rem;font-size:.8rem;color:var(--red)">Delete</button>
+  </div>`;
+}
+function domReviewControls(task){
+  return `<div style="margin-top:1.25rem;border-top:1px solid rgba(255,255,255,.1);padding-top:1.1rem">
+    <div style="font-size:.65rem;letter-spacing:2px;color:var(--gold);margin-bottom:.75rem">JAMES'S REVIEW</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">
+      <button onclick="approveTask(${task.id},this)" class="tap" style="padding:.75rem;background:var(--sage-2);border-radius:.85rem;color:#fff;font-size:.82rem"><i class="fa-solid fa-check" style="margin-right:.3rem"></i>Approve</button>
+      <button onclick="redoTask(${task.id},this)" class="tap" style="padding:.75rem;background:var(--red);border-radius:.85rem;color:#fff;font-size:.82rem"><i class="fa-solid fa-rotate-left" style="margin-right:.3rem"></i>Send back / Redo</button>
+      <button onclick="deductStarsFor(${task.id})" class="tap" style="padding:.75rem;background:rgba(143,17,24,.25);border-radius:.85rem;color:var(--rose);font-size:.82rem"><i class="fa-solid fa-star-half-stroke" style="margin-right:.3rem"></i>Deduct stars</button>
+      <button onclick="requestReflectionFor(${task.id})" class="tap" style="padding:.75rem;background:rgba(255,255,255,.06);border-radius:.85rem;font-size:.82rem">Request reflection</button>
+      <button onclick="addConsequenceFor(${task.id})" class="tap" style="padding:.75rem;background:rgba(255,255,255,.06);border-radius:.85rem;font-size:.82rem">Add consequence</button>
+      <button onclick="downloadEvidence(${task.id})" class="tap" style="padding:.75rem;background:rgba(255,255,255,.06);border-radius:.85rem;font-size:.82rem"><i class="fa-solid fa-download" style="margin-right:.3rem"></i>Download</button>
+    </div>
+    <button onclick="deleteTask(${task.id},this)" class="tap" style="width:100%;margin-top:.5rem;padding:.6rem;color:var(--stone);font-size:.75rem">Delete task</button>
+  </div>`;
 }
 async function submitTaskEvidence(taskId,button){
   const task=state.tasks.find(t=>String(t.id)===String(taskId)); if(!task)return;
-  const required=ensureArray(task.requiredEvidence), textVal=document.getElementById('evidence-text')?.value.trim();
-  if(required.includes('text')&&!textVal)return alert('Please complete the text report.');
-  button.disabled=true; const items=[]; if(textVal)items.push({type:'text',value:textVal});
+  const required=ensureArray(task.requiredEvidence), reqs=taskReqs(task);
+  const items=[];
+  /* text validation */
+  if(required.includes('text')){
+    const ta=document.getElementById('evidence-text'); const val=(ta&&ta.value||'').trim();
+    const n=_wordCount(val), r=reqs.text||{};
+    if(!val) return alert('Please complete the text report.');
+    if(r.minWords&&n<r.minWords) return alert(`Your report needs at least ${r.minWords} words (you have ${n}).`);
+    if(r.maxWords&&n>r.maxWords) return alert(`Your report must be at most ${r.maxWords} words (you have ${n}).`);
+    items.push({type:'text',value:val});
+  }
+  /* media counts */
+  if(required.includes('photo')){ const need=(reqs.photo&&reqs.photo.min)||1; if(!_pend||_pend.photo.length<need) return alert(`Capture ${need} photo${need>1?'s':''} first (you have ${_pend?_pend.photo.length:0}).`); }
+  if(required.includes('video')&&(!_pend||!_pend.video.length)) return alert('Record the video first.');
+  if(required.includes('voice')&&(!_pend||!_pend.voice.length)) return alert('Record the voice note first.');
+  button.disabled=true;
   try{
-    for(const type of required.filter(t=>t!=='text')){
-      const file=document.getElementById('evidence-'+type)?.files?.[0];
-      if(!file)return alert('Please add the required '+titleCase(type)+'.');
-      const ref=evidenceStorage.ref('evidence/'+taskId+'/'+Date.now()+'-'+file.name.replace(/[^a-zA-Z0-9._-]/g,'_'));
-      button.textContent='Uploading '+titleCase(type)+'…';
-      const url=await uploadEvidenceFile(ref,file,button);
-      items.push({type,name:file.name,url,size:file.size});
+    const blobUploads=[];
+    if(_pend){
+      _pend.photo.forEach((b,i)=>blobUploads.push({type:'photo',blob:b,name:'photo-'+(i+1)+'.jpg'}));
+      _pend.video.forEach((b,i)=>blobUploads.push({type:'video',blob:b,name:'video.webm'}));
+      _pend.voice.forEach((b,i)=>blobUploads.push({type:'voice',blob:b,name:'voice.webm'}));
     }
-    task.evidence=items; task.report=textVal||'';
+    for(const u of blobUploads){
+      button.textContent='Uploading '+titleCase(u.type)+'…';
+      const ref=evidenceStorage.ref('evidence/'+taskId+'/'+Date.now()+'-'+u.name);
+      const file=new File([u.blob],u.name,{type:u.blob.type});
+      const url=await uploadEvidenceFile(ref,file,button);
+      items.push({type:u.type,name:u.name,url,size:u.blob.size});
+    }
+    task.evidence=items; task.report=(items.find(i=>i.type==='text')||{}).value||'';
     state.evidence.unshift({id:Date.now(),taskId,title:task.title,date:new Date().toISOString(),items});
-    button.textContent='Saving…'; await completeTask(taskId); button.closest('.fixed').remove();
+    button.textContent='Saving…'; _pend=null; await completeTask(taskId); button.closest('.fixed').remove();
   }catch(err){ console.error(err); button.disabled=false; button.textContent='Submit Evidence to James'; alert('Submission failed. Check your connection.'); }
 }
+/* ── James's task controls ── */
+function approveTask(id,btn){ const t=state.tasks.find(x=>String(x.id)===String(id)); if(!t)return; t.reviewed=true; t.approved=true; addNotification('reward','James approved this','“'+titleCase(t.title)+'” approved.','tasks'); saveState(); btn.closest('.fixed').remove(); renderTasks(); showToast('Approved','success'); }
+function redoTask(id){ const t=state.tasks.find(x=>String(x.id)===String(id)); if(!t)return; const reason=prompt('Why is this being sent back? (optional)')||''; t.status='pending'; t.attempt=(t.attempt||1)+1; t.redoReason=reason.trim(); t.evidence=[]; t.reviewed=false; t.approved=false; addNotification('redo','James sent this back as a redo',titleCase(t.title),'tasks'); saveState(); document.querySelectorAll('.fixed').forEach(x=>x.remove()); renderTasks(); renderDashboard(); showToast('Sent back for redo','success'); }
+function deductStarsFor(id){ const t=state.tasks.find(x=>String(x.id)===String(id)); const amt=parseInt(prompt('How many stars to deduct?','2')||'0',10); if(!amt||amt<=0)return; state.stars=Math.max(0,(state.stars||0)-amt); state.starLog.unshift({id:Date.now(),date:new Date().toISOString().slice(0,10),reason:'Deducted by James: '+(t?titleCase(t.title):'task'),amount:-amt}); addNotification('consequence','James deducted stars','−'+amt+' stars','stars'); saveState(); renderRewards&&renderRewards(); updateHeader(); showToast('−'+amt+' stars','success'); }
+function requestReflectionFor(id){ const t=state.tasks.find(x=>String(x.id)===String(id)); if(!t)return; const refl={id:Date.now(),title:'Reflection: '+titleCase(t.title),desc:'Reflect on why this happened and what you will do better.',due:new Date(Date.now()+86400000).toISOString().slice(0,10),dueAt:new Date(Date.now()+86400000).toISOString(),category:'Reflective log',status:'pending',priority:1,requiredEvidence:['text'],evidenceReqs:{text:{minWords:40}},assignedAt:new Date().toISOString(),evidence:[],attempt:1}; state.tasks.unshift(refl); addNotification('task','James requested a reflection',refl.title,'tasks'); saveState(); document.querySelectorAll('.fixed').forEach(x=>x.remove()); renderTasks(); showToast('Reflection requested','success'); }
+function addConsequenceFor(id){ const t=state.tasks.find(x=>String(x.id)===String(id)); const title=prompt('Consequence title:', t?('Consequence: '+titleCase(t.title)):'Consequence'); if(!title)return; state.punishments.unshift({id:Date.now(),title:titleCase(title),desc:'',kind:'timed',due:new Date(Date.now()+86400000).toISOString().slice(0,10),dueAt:new Date(Date.now()+86400000).toISOString(),status:'active',assignedAt:new Date().toISOString()}); addNotification('consequence','James added a consequence',titleCase(title),'protocols'); saveState(); document.querySelectorAll('.fixed').forEach(x=>x.remove()); showToast('Consequence added','success'); }
+function downloadEvidence(id){ const t=state.tasks.find(x=>String(x.id)===String(id)); if(!t)return; ensureArray(t.evidence).filter(e=>e.url).forEach(e=>{ const a=document.createElement('a'); a.href=e.url; a.target='_blank'; a.rel='noopener'; a.download=e.name||e.type; a.click(); }); showToast('Opening evidence…','info'); }
+function revokeTask(id,btn){ if(!confirm('Revoke this task silently? Jacob is not notified.'))return; state.tasks=state.tasks.filter(x=>String(x.id)!==String(id)); saveState(); btn.closest('.fixed').remove(); renderTasks(); renderDashboard(); /* deliberately no notification */ }
+function deleteTask(id,btn){ if(!confirm('Delete this task?'))return; state.tasks=state.tasks.filter(x=>String(x.id)!==String(id)); saveState(); btn.closest('.fixed').remove(); renderTasks(); renderDashboard(); }
 async function completeTask(taskId){
   const task=state.tasks.find(t=>String(t.id)===String(taskId)); if(!task)return;
   const backup=JSON.stringify(state); task.status='completed'; task.completedAt=new Date().toISOString(); task.completedDate=task.completedAt.slice(0,10);
   const earned=task.priority||1; state.stars=(state.stars||0)+earned;
   state.starLog.unshift({id:Date.now(),date:task.completedDate,reason:'Completed: '+task.title,amount:earned});
   state.punishments.forEach(p=>{ if(p.status==='active'&&String(p.linkedTaskId)===String(taskId)){p.status='completed';p.completedAt=task.completedAt;} });
-  addNotification('review','Proof submitted',task.title+' is awaiting review.','tasks');
+  addNotification('review','Jacob has submitted evidence','“'+titleCase(task.title)+'” — you need to review this.','tasks');
   localStorage.setItem('the_system_v4',JSON.stringify(state));
   try{ await sharedStateDocument.set(getSharedState()); showConfetti(35); renderDashboard(); renderTasks(); }
   catch(err){ state=JSON.parse(backup); localStorage.setItem('the_system_v4',backup); throw err; }
@@ -616,8 +800,13 @@ function showAddTaskModal(){
         <div style="display:flex;flex-wrap:wrap;gap:.4rem">${quick.map(([label,min])=>`<button type="button" class="qd-btn pill tap" data-min="${min===null?'tonight':min}" onclick="${min===null?'setTaskTonight()':`setTaskDeadline(${min})`}" style="padding:.4rem .9rem;font-size:.72rem">${label}</button>`).join('')}</div>
       </div>
       <label style="font-size:.7rem;color:rgba(198,166,66,.7)">DUE DATE &amp; TIME<input id="task-deadline" type="datetime-local" value="${_localDateTimeValue(def)}" class="beautiful-input" style="width:100%;padding:.75rem .85rem;border-radius:.85rem;margin-top:.3rem;display:block"></label>
-      <select id="task-cat" class="beautiful-input" style="width:100%;padding:.85rem 1rem;border-radius:1rem"><option>Service</option><option>Chore</option><option>Personal</option><option>Consequence Task</option></select>
-      <div><div style="font-size:.7rem;color:rgba(198,166,66,.7);margin-bottom:.5rem">REQUIRED PROOF</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">${[['photo','Photo'],['video','Video'],['voice','Voice Note'],['text','Text Report']].map(([id,label])=>`<label class="glass" style="padding:.75rem;border-radius:1rem;font-size:.85rem;display:flex;align-items:center;gap:.5rem;cursor:pointer"><input type="checkbox" id="ev-${id}" style="accent-color:var(--red)">${label}</label>`).join('')}</div></div>
+      <select id="task-cat" class="beautiful-input" style="width:100%;padding:.85rem 1rem;border-radius:1rem"><option>Service</option><option>Chore</option><option>Personal</option><option>Reflective log</option><option>Consequence Task</option></select>
+      <div><div style="font-size:.7rem;color:rgba(198,166,66,.7);margin-bottom:.5rem">REQUIRED PROOF — captured live, no uploads</div><div style="display:flex;flex-direction:column;gap:.55rem">
+        ${proofRow('photo','Photo','fa-camera',`<label style="font-size:.62rem;color:var(--stone)">Minimum photos<input id="req-photo-min" type="number" min="1" value="1" class="beautiful-input" style="width:100%;padding:.55rem;border-radius:.6rem;margin-top:.15rem;display:block"></label>`)}
+        ${proofRow('video','Video','fa-video',`<label style="font-size:.62rem;color:var(--stone)">Exact duration (seconds)<input id="req-video-sec" type="number" min="1" value="15" class="beautiful-input" style="width:100%;padding:.55rem;border-radius:.6rem;margin-top:.15rem;display:block"></label>`)}
+        ${proofRow('voice','Voice Note','fa-microphone',`<label style="font-size:.62rem;color:var(--stone)">Minimum length (seconds)<input id="req-voice-sec" type="number" min="1" value="10" class="beautiful-input" style="width:100%;padding:.55rem;border-radius:.6rem;margin-top:.15rem;display:block"></label>`)}
+        ${proofRow('text','Text Report','fa-pen',`<div style="display:grid;grid-template-columns:1fr 1fr;gap:.4rem"><label style="font-size:.62rem;color:var(--stone)">Min words<input id="req-text-min" type="number" min="0" value="0" class="beautiful-input" style="width:100%;padding:.55rem;border-radius:.6rem;margin-top:.15rem;display:block"></label><label style="font-size:.62rem;color:var(--stone)">Max words<input id="req-text-max" type="number" min="0" value="0" class="beautiful-input" style="width:100%;padding:.55rem;border-radius:.6rem;margin-top:.15rem;display:block"></label></div><label style="display:flex;align-items:center;gap:.5rem;font-size:.72rem;margin-top:.5rem"><input type="checkbox" id="req-text-spell" style="accent-color:var(--red)">Require spell-check</label>`)}
+      </div></div>
     </div>
     <div style="display:flex;gap:.75rem;margin-top:1.5rem"><button onclick="this.closest('.fixed').remove()" style="flex:1;padding:.85rem;border:1px solid rgba(255,255,255,.2);border-radius:1rem">Cancel</button><button onclick="addNewTask(this)" style="flex:1;padding:.85rem;background:var(--red);border-radius:1rem;color:#fff">Assign</button></div>
   </div></div>`;
@@ -629,13 +818,25 @@ function setTaskTonight(){
   document.querySelectorAll('.qd-btn').forEach(b=>b.classList.remove('qd-on'));
   const hit=document.querySelector('.qd-btn[data-min="tonight"]'); if(hit) hit.classList.add('qd-on');
 }
+function proofRow(id,label,icon,reqHtml){
+  return `<div class="glass" style="padding:.7rem .9rem;border-radius:1rem">
+    <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;font-size:.88rem"><input type="checkbox" id="ev-${id}" style="accent-color:var(--red)" onchange="document.getElementById('req-${id}').style.display=this.checked?'block':'none'"><i class="fa-solid ${icon}" style="color:var(--rose);width:1.1rem;text-align:center"></i>${label}</label>
+    <div id="req-${id}" style="display:none;margin-top:.6rem;padding-top:.6rem;border-top:1px solid rgba(255,255,255,.08)">${reqHtml}</div>
+  </div>`;
+}
 function addNewTask(button){
   const title=titleCase(document.getElementById('task-title').value||'Untitled Task');
   const dl=document.getElementById('task-deadline').value; // datetime-local: YYYY-MM-DDTHH:MM
   const dueAt=dl?dl+':00':new Date(Date.now()+86400000).toISOString();
   const date=(dl||new Date(Date.now()+86400000).toISOString()).slice(0,10);
   const required=['photo','video','voice','text'].filter(t=>document.getElementById('ev-'+t)?.checked);
-  const task={id:Date.now(),title,desc:document.getElementById('task-desc').value.trim(),due:date,dueAt,category:document.getElementById('task-cat').value,status:'pending',priority:2,requiredEvidence:required,assignedAt:new Date().toISOString(),evidence:[]};
+  const numv=(id,d)=>{ const e=document.getElementById(id); const n=e?parseInt(e.value,10):NaN; return isNaN(n)?d:n; };
+  const evidenceReqs={};
+  if(required.includes('photo')) evidenceReqs.photo={min:Math.max(1,numv('req-photo-min',1))};
+  if(required.includes('video')) evidenceReqs.video={seconds:Math.max(1,numv('req-video-sec',15))};
+  if(required.includes('voice')) evidenceReqs.voice={minSeconds:Math.max(1,numv('req-voice-sec',10))};
+  if(required.includes('text')) evidenceReqs.text={minWords:Math.max(0,numv('req-text-min',0)),maxWords:Math.max(0,numv('req-text-max',0)),spellcheck:!!document.getElementById('req-text-spell')?.checked};
+  const task={id:Date.now(),title,desc:document.getElementById('task-desc').value.trim(),due:date,dueAt,category:document.getElementById('task-cat').value,status:'pending',priority:2,requiredEvidence:required,evidenceReqs,attempt:1,assignedAt:new Date().toISOString(),evidence:[]};
   state.tasks.unshift(task);
   if(task.category==='Consequence Task') state.punishments.unshift({id:Date.now()+1,title:task.title,desc:task.desc,kind:'task',linkedTaskId:task.id,status:'active',assignedAt:new Date().toISOString()});
   addNotification('task','Task assigned',task.title,'tasks'); saveState(); button.closest('.fixed').remove(); renderTasks(); renderDashboard(); showConfetti(20);
