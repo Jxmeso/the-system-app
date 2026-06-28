@@ -6,7 +6,7 @@
 
 /* ── Version gate: forces one clean navigation when new build detected ── */
 (function(){
-  var BUILD='v5-20260628-19';
+  var BUILD='v5-20260628-20';
   try{
     if(localStorage.getItem('_sys_build')!==BUILD){
       try{localStorage.setItem('_sys_build',BUILD);}catch(_){}
@@ -43,13 +43,25 @@ const ASPIRATION_BADGES = [
   {id:'asp-legend',name:'Cornerstone',icon:'fa-gem',goal:'Earn five hundred stars.'}
 ];
 function allBadges(){ return [...SYSTEM_BADGES,...ASPIRATION_BADGES,...ensureArray(state.customBadges)]; }
-/* Consequences removed — it has its own panel (was duplicated here) */
+/* Rules sections — no "Protocols" naming */
 const RULE_SECTIONS = [
   ['arrivalProcedure','Arrival Procedure','fa-door-open'],
   ['houseRules','House Rules','fa-house-chimney'],
-  ['protocols','Protocols','fa-section'],
-  ['communication','Communication','fa-comments'],
+  ['communication','Communication Rules','fa-comments'],
   ['outOfSession','Out Of Session','fa-moon']
+];
+/* Consequence categories — numbered lists James builds */
+const CONSEQUENCE_CATEGORIES = [
+  ['humiliation','Humiliation','fa-face-flushed'],
+  ['degradation','Degradation','fa-arrow-down-wide-short'],
+  ['identification','Identification','fa-id-badge'],
+  ['pain','Pain','fa-bolt'],
+  ['service','Service','fa-hands-holding'],
+  ['control','Control','fa-hand-fist'],
+  ['loss','Loss','fa-ban'],
+  ['timewaste','Time Waste','fa-hourglass-half'],
+  ['phone','Phone','fa-mobile-screen'],
+  ['application','Application','fa-mobile-button']
 ];
 /* Order top→bottom: Loves, Likes, Tries, Soft, Hard (Hard last, hideable) */
 const LIMIT_GROUPS = [
@@ -59,10 +71,15 @@ const LIMIT_GROUPS = [
   ['supplements','Soft Limits','fa-hand'],
   ['hard','Hard Limits','fa-ban']
 ];
+/* Impact play — implements + body areas for mapping */
+const IMPACT_IMPLEMENTS = ['Dragon Cane','Leather Paddle','Long Riding Crop','Rubber Flogger','Rubber Paddle','School Cane','Short Riding Crop','Spiked Paddle','Tawse','Whip','Wooden Paddle'];
+const IMPACT_AREAS = ['Armpit','Ass Cheeks','Asshole','Bicep','Balls','Chest','Dick Shaft Bottom','Dick Shaft Top','Dickhead Bottom','Dickhead Top','Face','Inner Thighs','Lower Back','Lower Calf','Lower Tummy','Neck','Nipple','Obliques','Outer Thigh','Shoulders','Side Of Balls','Tongue','Underneath Ass Cheeks','Underneath Balls','Upper Ass Cheek','Upper Back'];
+/* Electro items — alphabetised */
+const ELECTRO_ITEMS = ['Anal Plug, Extra Large','Anal Plug, Large','Anal Plug, Medium','Anal Plug, Small','Arsehole','Glands / Dickhead','Gucci','Tongue'];
 const NAV_ITEMS = [
   ['dashboard','Home','fa-house'],
   ['tasks','Tasks','fa-square-check'],
-  ['protocols','Protocols','fa-section'],
+  ['protocols','Rules','fa-section'],
   ['journal','Journal','fa-book-open'],
   ['stars','Rewards','fa-star']
 ];
@@ -120,6 +137,7 @@ function defaultSystemState(role){
     hideHardLimits:false,auth:{configured:false},pinFails:0,appLock:{locked:false},forceJacobPinChange:false,
     voice:{enabled:false,samples:[]},
     requests:[],helpers:[],memories:[],suggestions:[],suggestionBoxOpen:false,requestBoxOpen:true,activeCheckIn:null,redactedRecords:[],
+    consequenceLists:{},bodyPhotos:[],bodyPhotosVisible:false,impactMap:{},
     subProfile:defaultSubProfile(),bodyMaps:defaultBodyMaps(),personalRecords:defaultPersonalRecords(),
     appSettings:{reduceMotion:false,starSpending:true}
   };
@@ -197,11 +215,10 @@ function defaultBodyMaps(){
   return { ticklish:[], sensitive:[] };
 }
 function defaultPersonalRecords(){
-  const el=['Left Nipple','Right Nipple','Upper Abdomen','Mid Abdomen','Lower Abdomen','Inner Thigh','Genital Area','Anal S','Anal M','Anal L','Urethral Sound','Loops','Violet Wand'];
   return {
     breath:{longestHold:'',rebreathe3L:'',rebreathe5L:'',rebreathe6L:'',bubbleBottleLarge:'',bubbleBottleSmall:'',resistanceMaximum:''},
-    /* clean blank defaults — James fills these in via the editor */
-    electro:Object.fromEntries(el.map(label=>[label,{min:0,max:0,pleasureStart:0,pleasureEnd:0}]))
+    /* alphabetised electro items, blank defaults — James fills via the slider editor */
+    electro:Object.fromEntries(ELECTRO_ITEMS.map(label=>[label,{min:0,max:0,pleasureStart:0,pleasureEnd:0}]))
   };
 }
 function migrateEnhancedState(){
@@ -269,6 +286,10 @@ function normalizeState(){
   if(typeof state.suggestionBoxOpen!=='boolean') state.suggestionBoxOpen=false;
   if(typeof state.requestBoxOpen!=='boolean') state.requestBoxOpen=true;
   state.redactedRecords=ensureArray(state.redactedRecords);
+  state.bodyPhotos=ensureArray(state.bodyPhotos);
+  if(typeof state.bodyPhotosVisible!=='boolean') state.bodyPhotosVisible=false;
+  if(!state.consequenceLists||typeof state.consequenceLists!=='object') state.consequenceLists={};
+  if(!state.impactMap||typeof state.impactMap!=='object') state.impactMap={};
   if(typeof state.hideHardLimits!=='boolean'){ state.hideHardLimits=false; }
   state.appSettings={reduceMotion:false,starSpending:true,...(state.appSettings||{})};
   if(typeof state.appSettings.starSpending!=='boolean'){ state.appSettings.starSpending=true; changed=true; }
@@ -278,6 +299,10 @@ function normalizeState(){
   if(!state.bmClearedV6){ state.bodyMaps={ticklish:[],sensitive:[]}; state.bmClearedV6=true; changed=true; }
   /* one-time clear of staggered demo electro numbers */
   if(!state.electroClearedV6){ state.personalRecords=state.personalRecords||{}; state.personalRecords.electro=defaultPersonalRecords().electro; state.electroClearedV6=true; changed=true; }
+  /* re-seed electro to the alphabetised item set if old keys remain */
+  if(!state.electroClearedV7){ state.personalRecords=state.personalRecords||{}; state.personalRecords.electro=defaultPersonalRecords().electro; state.electroClearedV7=true; changed=true; }
+  /* drop the old "Protocols" rule section */
+  if(state.rules&&state.rules.protocols!==undefined){ delete state.rules.protocols; changed=true; }
   if(changed){ try{ saveState(); }catch(_){} }
 }
 
@@ -1420,13 +1445,15 @@ function addNewTask(button){
 }
 
 /* ── Protocols hub ── */
-const PROTOCOL_TABS=[['rules','Rules','fa-section'],['boundaries','Boundaries','fa-shield-halved'],['bodymaps','Body Maps','fa-person'],['records','Records','fa-chart-simple'],['consequences','Consequences','fa-hourglass-half']];
+const PROTOCOL_TABS=[['rules','Rules','fa-section'],['consequences','Consequences','fa-hourglass-half'],['boundaries','Boundaries','fa-shield-halved'],['body','Body','fa-person'],['impact','Impact','fa-gavel']];
 function setProtocolPanel(p){ activeProtocolPanel=p; renderProtocols(); }
 function renderProtocols(){
   const tab=document.getElementById('tab-protocols'); if(!tab)return;
+  /* legacy panel ids → new */
+  if(activeProtocolPanel==='bodymaps'||activeProtocolPanel==='records') activeProtocolPanel='body';
   tab.innerHTML=`
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1.1rem">
-      <div><div class="heading-serif" style="font-size:2.5rem">Protocols</div><div style="font-size:.8rem;color:var(--stone);margin-top:.25rem">Rules, boundaries, records and consequences.</div></div>
+      <div><div class="heading-serif" style="font-size:2.5rem">The Dynamic</div><div style="font-size:.8rem;color:var(--stone);margin-top:.25rem">Rules, consequences, boundaries and records.</div></div>
       <button onclick="showProfileModal()" class="pill tap" style="font-size:.72rem;padding:.4rem .85rem;flex-shrink:0"><i class="fa-solid fa-user" style="margin-right:.3rem"></i>Profile</button>
     </div>
     <div class="seg-scroll" style="display:flex;gap:.4rem;overflow-x:auto;margin-bottom:1.25rem;padding-bottom:.4rem">
@@ -1436,9 +1463,75 @@ function renderProtocols(){
   const box=document.getElementById('protocol-panel');
   if(activeProtocolPanel==='rules') box.innerHTML=renderProtocolRules();
   else if(activeProtocolPanel==='boundaries') box.innerHTML=renderBoundaryPanel();
-  else if(activeProtocolPanel==='bodymaps') box.innerHTML=renderBodyMapsPanel();
-  else if(activeProtocolPanel==='records') box.innerHTML=renderPersonalRecordsPanel();
-  else if(activeProtocolPanel==='consequences'){ box.innerHTML='<div id="punishments-active" style="display:flex;flex-direction:column;gap:1rem;margin-bottom:1.5rem"></div><div style="font-size:.65rem;color:rgba(198,166,66,.6);letter-spacing:3px;margin-bottom:.5rem">HISTORY</div><div id="punishments-history" style="display:flex;flex-direction:column;gap:.5rem;font-size:.85rem"></div>'; renderPunishments(); }
+  else if(activeProtocolPanel==='body') box.innerHTML=renderBodyPanel();
+  else if(activeProtocolPanel==='impact') box.innerHTML=renderImpactPanel();
+  else if(activeProtocolPanel==='consequences'){ box.innerHTML=renderConsequenceCategories()+'<div style="font-size:.65rem;color:rgba(198,166,66,.6);letter-spacing:3px;margin:1.5rem 0 .5rem">ACTIVE</div><div id="punishments-active" style="display:flex;flex-direction:column;gap:1rem;margin-bottom:1.5rem"></div><div style="font-size:.65rem;color:rgba(198,166,66,.6);letter-spacing:3px;margin-bottom:.5rem">HISTORY</div><div id="punishments-history" style="display:flex;flex-direction:column;gap:.5rem;font-size:.85rem"></div>'; renderPunishments(); }
+}
+/* ── Consequence categories (numbered lists James builds) ── */
+function renderConsequenceCategories(){
+  const isDom=state.currentRole==='dom'; const cl=state.consequenceLists||{};
+  return `<div style="display:flex;flex-direction:column;gap:1rem">${CONSEQUENCE_CATEGORIES.map(([key,label,icon])=>{
+    const items=ensureArray(cl[key]);
+    return `<section class="card" style="padding:1.1rem 1.25rem"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:${items.length?'.75rem':'.25rem'}"><div style="display:flex;align-items:center;gap:.7rem"><span class="icon-tile"><i class="fa-solid ${icon}"></i></span><div style="font-weight:600">${label}</div></div>${isDom?`<button onclick="addConsequenceListItem('${key}')" class="pill tap" style="font-size:.65rem;padding:.28rem .7rem;color:var(--gold)">+ Add</button>`:''}</div>${items.length?`<ol style="margin:0;padding-left:0;list-style:none;display:flex;flex-direction:column;gap:.4rem">${items.map((it,i)=>`<li style="display:flex;gap:.6rem;font-size:.85rem;align-items:flex-start"><span class="rule-number">${i+1}</span><span style="flex:1">${escapeText(it)}</span>${isDom?`<span onclick="removeConsequenceListItem('${key}',${i})" style="cursor:pointer;color:var(--stone)">×</span>`:''}</li>`).join('')}</ol>`:`<div style="font-size:.72rem;opacity:.4;padding-left:.25rem">${isDom?'Add options for this category.':'Nothing listed.'}</div>`}</section>`;
+  }).join('')}</div>`;
+}
+function addConsequenceListItem(key){ if(state.currentRole!=='dom')return; const v=(prompt('Add a '+key+' consequence:')||'').trim(); if(!v)return; state.consequenceLists=state.consequenceLists||{}; state.consequenceLists[key]=ensureArray(state.consequenceLists[key]); state.consequenceLists[key].push(v); saveState(); renderProtocols(); }
+function removeConsequenceListItem(key,i){ if(state.currentRole!=='dom')return; ensureArray(state.consequenceLists[key]).splice(i,1); saveState(); renderProtocols(); }
+/* ── Body area: dated photos + body maps + records together ── */
+function renderBodyPanel(){
+  return renderBodyPhotosSection()+'<div style="height:1rem"></div>'+renderBodyMapsPanel()+'<div style="height:1rem"></div>'+renderPersonalRecordsPanel();
+}
+function renderBodyPhotosSection(){
+  const isDom=state.currentRole==='dom';
+  const photos=ensureArray(state.bodyPhotos).slice().sort((a,b)=>new Date(b.date)-new Date(a.date));
+  const canSee=isDom||state.bodyPhotosVisible;
+  return `<section class="card" style="padding:1.25rem">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem"><div><div style="font-size:1.2rem;font-weight:600"><i class="fa-solid fa-camera-retro" style="color:var(--rose);margin-right:.4rem"></i>Body Record</div><div style="font-size:.72rem;color:var(--stone);margin-top:.15rem">Dated photos — progress over time.</div></div>
+    ${isDom?`<div style="display:flex;gap:.4rem"><button onclick="toggleBodyPhotosVisible()" class="pill tap" style="font-size:.62rem;padding:.28rem .7rem;${state.bodyPhotosVisible?'color:var(--sage)':'color:var(--stone)'}"><i class="fa-solid ${state.bodyPhotosVisible?'fa-eye':'fa-eye-slash'}" style="margin-right:.25rem"></i>${state.bodyPhotosVisible?'Jacob sees':'Hidden'}</button><button onclick="captureBodyPhoto()" class="pill tap" style="font-size:.62rem;padding:.28rem .7rem;color:var(--gold)">+ Photo</button></div>`:''}</div>
+    ${!canSee?`<div class="redact-shimmer" style="border-radius:1rem;min-height:5rem;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.35);font-size:.8rem"><i class="fa-solid fa-lock" style="margin-right:.4rem"></i>Hidden by James</div>`
+      :photos.length?`<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.5rem">${photos.map(p=>`<a href="${p.url}" target="_blank" rel="noopener" style="display:block;position:relative;border-radius:.75rem;overflow:hidden"><img src="${p.url}" style="width:100%;aspect-ratio:.8;object-fit:cover" loading="lazy"><span style="position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(0,0,0,.8));color:#fff;font-size:.6rem;padding:.4rem .3rem .25rem;text-align:center">${formatUKDate(p.date)}</span>${isDom?`<span onclick="event.preventDefault();removeBodyPhoto('${p.id}')" style="position:absolute;top:.2rem;right:.2rem;width:1.4rem;height:1.4rem;border-radius:999px;background:rgba(0,0,0,.6);color:#fff;font-size:.8rem;display:flex;align-items:center;justify-content:center">×</span>`:''}</a>`).join('')}</div>`
+      :`<div style="font-size:.78rem;opacity:.5;padding:.5rem 0">${isDom?'No photos yet — tap + Photo to add one with today’s date.':'Nothing here yet.'}</div>`}
+  </section>`;
+}
+function toggleBodyPhotosVisible(){ if(state.currentRole!=='dom')return; state.bodyPhotosVisible=!state.bodyPhotosVisible; saveState(); renderProtocols(); }
+function removeBodyPhoto(id){ if(state.currentRole!=='dom')return; if(!confirm('Remove this photo?'))return; state.bodyPhotos=ensureArray(state.bodyPhotos).filter(p=>p.id!==id); saveState(); renderProtocols(); }
+async function captureBodyPhoto(){
+  if(state.currentRole!=='dom')return;
+  const m=document.createElement('div'); m.id='bodyphoto-modal';
+  m.innerHTML=`<div class="fixed inset-0 z-[260]" style="background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:1rem"><video id="bp-video" autoplay muted playsinline style="width:100%;max-width:30rem;border-radius:1.25rem;background:#111"></video><div id="bp-hint" style="font-size:.8rem;color:var(--stone);margin-top:.75rem">Today: ${formatUKDate(new Date().toISOString())}</div><div id="bp-actions" style="display:flex;gap:1rem;margin-top:1.25rem"></div><button onclick="closeBodyPhoto()" style="margin-top:1.25rem;font-size:.8rem;color:var(--stone)">Cancel</button></div>`;
+  document.getElementById('modal-container').appendChild(m);
+  try{ _bpStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}}); document.getElementById('bp-video').srcObject=_bpStream; document.getElementById('bp-actions').innerHTML=`<button onclick="snapBodyPhoto(this)" class="tap" style="width:4.5rem;height:4.5rem;border-radius:999px;background:#fff;border:4px solid var(--rose)"></button>`; }
+  catch(e){ document.getElementById('bp-hint').textContent='Camera permission needed.'; }
+}
+var _bpStream=null;
+function closeBodyPhoto(){ if(_bpStream){ _bpStream.getTracks().forEach(t=>t.stop()); _bpStream=null; } const m=document.getElementById('bodyphoto-modal'); if(m)m.remove(); }
+async function snapBodyPhoto(btn){
+  const v=document.getElementById('bp-video'); if(!v||!v.videoWidth)return; btn.disabled=true;
+  const c=document.createElement('canvas'); c.width=v.videoWidth; c.height=v.videoHeight; c.getContext('2d').drawImage(v,0,0);
+  document.getElementById('bp-hint').textContent='Saving…';
+  c.toBlob(async blob=>{
+    try{ const ref=evidenceStorage.ref('bodyphotos/'+Date.now()+'.jpg'); const file=new File([blob],'body.jpg',{type:'image/jpeg'}); const url=await uploadEvidenceFile(ref,file,{textContent:'',disabled:false}); state.bodyPhotos=ensureArray(state.bodyPhotos); state.bodyPhotos.unshift({id:'bp'+Date.now(),url,date:new Date().toISOString()}); saveState(); closeBodyPhoto(); renderProtocols(); showToast('Photo saved','success'); }
+    catch(e){ document.getElementById('bp-hint').textContent='Save failed.'; btn.disabled=false; }
+  },'image/jpeg',0.9);
+}
+/* ── Impact play: implements × body areas ── */
+function renderImpactPanel(){
+  const isDom=state.currentRole==='dom'; const map=state.impactMap||{};
+  return `<div style="font-size:.78rem;color:var(--stone);margin-bottom:1rem">Tap an implement to map the body areas it's used on.</div><div style="display:flex;flex-direction:column;gap:.75rem">${IMPACT_IMPLEMENTS.map(imp=>{
+    const areas=ensureArray(map[imp]);
+    return `<section class="card" style="padding:1rem 1.15rem"><div style="display:flex;justify-content:space-between;align-items:center"><div style="font-weight:600;font-size:.95rem"><i class="fa-solid fa-gavel" style="color:var(--red);margin-right:.5rem"></i>${imp}</div>${isDom?`<button onclick="editImpactAreas('${escapeText(imp)}')" class="pill tap" style="font-size:.62rem;padding:.28rem .7rem;color:var(--gold)">Map</button>`:''}</div>${areas.length?`<div style="display:flex;flex-wrap:wrap;gap:.35rem;margin-top:.6rem">${areas.map(a=>`<span class="pill" style="font-size:.68rem;padding:.22rem .6rem;color:var(--rose)">${escapeText(a)}</span>`).join('')}</div>`:`<div style="font-size:.7rem;opacity:.4;margin-top:.4rem">No areas mapped.</div>`}</section>`;
+  }).join('')}</div>`;
+}
+function editImpactAreas(imp){
+  if(state.currentRole!=='dom')return;
+  const sel=new Set(ensureArray((state.impactMap||{})[imp]));
+  const m=document.createElement('div');
+  m.innerHTML=`<div class="fixed inset-0 bg-black/95 z-[220] flex items-end md:items-center justify-center" onclick="this.remove()"><div onclick="event.stopImmediatePropagation()" class="glass" style="width:100%;max-width:32rem;max-height:90vh;overflow:auto;border-radius:2rem 2rem 0 0;padding:1.5rem;padding-bottom:max(1.5rem,env(safe-area-inset-bottom))"><div style="font-size:1.2rem;font-weight:600;margin-bottom:.3rem">${escapeText(imp)}</div><div style="font-size:.72rem;color:var(--stone);margin-bottom:1rem">Tap the areas this is used on.</div><div id="impact-areas" style="display:flex;flex-wrap:wrap;gap:.4rem">${IMPACT_AREAS.map(a=>`<button type="button" data-area="${escapeText(a)}" onclick="this.classList.toggle('tag-on')" class="pill tap${sel.has(a)?' tag-on':''}" style="font-size:.72rem;padding:.35rem .8rem">${escapeText(a)}</button>`).join('')}</div><button onclick="saveImpactAreas('${escapeText(imp)}',this)" style="width:100%;margin-top:1.25rem;padding:.85rem;background:var(--red);border-radius:1rem;color:#fff">Save</button></div></div>`;
+  document.getElementById('modal-container').appendChild(m);
+}
+function saveImpactAreas(imp,button){
+  const areas=[...document.querySelectorAll('#impact-areas .tag-on')].map(b=>b.dataset.area);
+  state.impactMap=state.impactMap||{}; state.impactMap[imp]=areas; saveState(); button.closest('.fixed').remove(); renderProtocols();
 }
 function renderProtocolRules(){
   return`<div style="display:flex;flex-direction:column;gap:1rem">${RULE_SECTIONS.map(([key,label,icon])=>`<section class="card" style="padding:1.25rem"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem"><div style="display:flex;align-items:center;gap:.75rem"><span class="icon-tile"><i class="fa-solid ${icon}"></i></span><div style="font-weight:600">${label}</div></div>${state.currentRole==='dom'?`<button onclick="editSection('${key}')" style="font-size:.7rem;padding:.3rem .75rem;background:rgba(255,255,255,.1);border-radius:.75rem">Edit</button>`:''}</div><div style="display:flex;flex-direction:column;gap:.5rem">${String(state.rules[key]||'').split('\n').map(x=>x.replace(/^\s*(?:[•\-]|\d+[.)])\s*/,'')).filter(Boolean).map((line,i)=>`<div style="display:flex;gap:.75rem;font-size:.85rem"><span class="rule-number">${i+1}</span><span>${escapeText(line)}</span></div>`).join('')||'<div style="font-size:.75rem;opacity:.4">Nothing Set.</div>'}</div></section>`).join('')}</div>`;
@@ -1459,20 +1552,20 @@ function removeLimit(key,idx){ if(state.currentRole!=='dom')return; ensureArray(
 /* Anatomically-shaped silhouette (front + back share the same body form) */
 function bodySilhouette(view){
   const back = view==='back';
-  // A filled humanoid silhouette built from a single smooth path
-  const body = `M100 16
-    c-13 0 -22 10 -22 24 c0 9 4 16 10 20
-    c-9 3 -14 9 -15 19 l-4 34
-    c-6 4 -22 14 -27 24 c-3 6 -9 22 -11 32 c-1 6 6 9 9 3 c4 -9 9 -20 13 -26
-    c3 -4 7 -8 11 -10 l-3 40 c-1 14 -1 30 1 44 l4 64 c1 10 1 22 -1 32 l-5 30
-    c-2 9 11 12 14 3 l9 -34 c3 -11 5 -24 6 -35 l3 -40 l3 0 l3 40
-    c1 11 3 24 6 35 l9 34 c3 9 16 6 14 -3 l-5 -30 c-2 -10 -2 -22 -1 -32 l4 -64
-    c2 -14 2 -30 1 -44 l-3 -40 c4 2 8 6 11 10 c4 6 9 17 13 26 c3 6 10 3 9 -3
-    c-2 -10 -8 -26 -11 -32 c-5 -10 -21 -20 -27 -24 l-4 -34
-    c-1 -10 -6 -16 -15 -19 c6 -4 10 -11 10 -20 c0 -14 -9 -24 -22 -24 z`;
+  /* Masculine male figure — broad shoulders, V-taper torso, muscular legs */
+  const body = `M100 14
+    c-12 0 -21 9 -21 21 c0 7 3 13 8 17
+    c-2 4 -3 8 -8 9 l-2 8
+    c-14 4 -28 9 -38 16 c-7 5 -11 12 -12 21 l-2 16 c-1 6 8 8 9 1 l3 -16 c1 -6 5 -11 11 -14
+    c-2 9 -3 19 -1 28 l2 14 -3 18 c-2 12 -1 25 2 37 l5 22
+    c2 14 1 29 -2 43 l-4 26 c-1 9 13 10 15 2 l7 -28 c3 -12 4 -25 4 -37
+    c0 -8 1 -16 3 -24 l2 0 c2 8 3 16 3 24 c0 12 1 25 4 37 l7 28 c2 8 16 7 15 -2 l-4 -26
+    c-3 -14 -4 -29 -2 -43 l5 -22 c3 -12 4 -25 2 -37 l-3 -18 2 -14 c2 -9 1 -19 -1 -28
+    c6 3 10 8 11 14 l3 16 c1 7 10 5 9 -1 l-2 -16 c-1 -9 -5 -16 -12 -21 c-10 -7 -24 -12 -38 -16
+    l-2 -8 c-5 -1 -6 -5 -8 -9 c5 -4 8 -10 8 -17 c0 -12 -9 -21 -21 -21 z`;
   const detail = back
-    ? `<path class="bm-line" d="M100 118 L100 196" /><path class="bm-line" d="M78 150 q22 10 44 0" />`
-    : `<path class="bm-line" d="M84 92 q16 8 32 0" /><circle class="bm-line" cx="88" cy="104" r="2.5"/><circle class="bm-line" cx="112" cy="104" r="2.5"/><path class="bm-line" d="M100 120 L100 168" />`;
+    ? `<path class="bm-line" d="M100 96 L100 188" /><path class="bm-line" d="M74 120 q26 14 52 0" /><path class="bm-line" d="M78 150 q22 10 44 0" />`
+    : `<path class="bm-line" d="M76 88 q24 12 48 0" /><circle class="bm-line" cx="86" cy="98" r="2.6"/><circle class="bm-line" cx="114" cy="98" r="2.6"/><path class="bm-line" d="M100 104 L100 170" /><path class="bm-line" d="M84 132 q16 6 32 0" /><path class="bm-line" d="M84 150 q16 6 32 0" />`;
   return `<svg viewBox="0 0 200 320" preserveAspectRatio="xMidYMid meet"><path class="bm-body" d="${body}"/>${detail}</svg>`;
 }
 function bodyFigure(kind,view){
@@ -1554,12 +1647,36 @@ function saveBreath(button){ document.querySelectorAll('[data-breath]').forEach(
 function showEditElectroModal(){
   if(state.currentRole!=='dom')return;
   const e=state.personalRecords.electro;
+  const sliderRow=(label,row)=>{
+    const v={min:Number(row.min)||0,max:Number(row.max)||0,pleasureStart:Number(row.pleasureStart)||0,pleasureEnd:Number(row.pleasureEnd)||0};
+    if(!(v.min||v.max)){ v.min=10;v.max=70;v.pleasureStart=25;v.pleasureEnd=50; }
+    const sl=(k,col,val)=>`<input type="range" min="0" max="100" step="1" value="${val}" data-ek="${k}" oninput="clampElectro(this)" class="ci-slider electro-slider" style="--ecol:${col}">`;
+    return `<div data-erow="${escapeText(label)}" class="subtle-card" style="padding:.85rem 1rem">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:.5rem"><span style="font-weight:600;font-size:.85rem">${escapeText(label)}</span><span class="e-readout" style="font-size:.68rem;color:var(--stone);font-variant-numeric:tabular-nums">${v.min}–${v.max} · ♥ ${v.pleasureStart}–${v.pleasureEnd}</span></div>
+      <div style="font-size:.55rem;color:var(--blue);text-transform:uppercase">Min</div>${sl('min','var(--blue)',v.min)}
+      <div style="font-size:.55rem;color:var(--rose);text-transform:uppercase;margin-top:.3rem">Pleasure start</div>${sl('pleasureStart','var(--rose)',v.pleasureStart)}
+      <div style="font-size:.55rem;color:var(--rose);text-transform:uppercase;margin-top:.3rem">Pleasure end</div>${sl('pleasureEnd','var(--gold)',v.pleasureEnd)}
+      <div style="font-size:.55rem;color:var(--gold);text-transform:uppercase;margin-top:.3rem">Max</div>${sl('max','var(--gold)',v.max)}
+    </div>`;
+  };
   const m=document.createElement('div');
-  m.innerHTML=`<div class="fixed inset-0 bg-black/95 z-[220] flex items-end md:items-center justify-center" onclick="this.remove()"><div onclick="event.stopImmediatePropagation()" class="glass" style="width:100%;max-width:34rem;max-height:94vh;overflow:auto;border-radius:2rem 2rem 0 0;padding:1.5rem;padding-bottom:max(1.5rem,env(safe-area-inset-bottom))"><div style="font-size:1.25rem;font-weight:600;margin-bottom:.4rem">Edit Electro Response</div><div style="font-size:.72rem;color:var(--stone);margin-bottom:1rem">Scale 1–100. Min / Max threshold and the pleasure-zone start / end.</div><div style="display:flex;flex-direction:column;gap:1rem">${Object.entries(e).map(([label,row])=>`<div data-erow="${escapeText(label)}"><div style="font-weight:600;font-size:.85rem;margin-bottom:.4rem">${escapeText(label)}</div><div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:.4rem">${[['min','Min'],['max','Max'],['pleasureStart','P-Start'],['pleasureEnd','P-End']].map(([k,lab])=>`<label style="font-size:.55rem;color:var(--stone);text-transform:uppercase">${lab}<input data-ek="${k}" type="number" min="0" max="100" class="beautiful-input" style="width:100%;padding:.5rem;border-radius:.6rem;margin-top:.15rem;display:block;text-align:center" value="${Number(row[k])||''}"></label>`).join('')}</div></div>`).join('')}</div><button onclick="saveElectro(this)" style="width:100%;margin-top:1.25rem;padding:.85rem;background:var(--red);border-radius:1rem;color:#fff">Save</button></div></div>`;
+  m.innerHTML=`<div class="fixed inset-0 bg-black/95 z-[220] flex items-end md:items-center justify-center" onclick="this.remove()"><div onclick="event.stopImmediatePropagation()" class="glass" style="width:100%;max-width:34rem;max-height:94vh;overflow:auto;border-radius:2rem 2rem 0 0;padding:1.5rem;padding-bottom:max(1.5rem,env(safe-area-inset-bottom))"><div style="font-size:1.25rem;font-weight:600;margin-bottom:.4rem">Edit Electro Response</div><div style="font-size:.72rem;color:var(--stone);margin-bottom:1rem">Sliders, 0–100. They can't cross: Min ≤ Pleasure start ≤ Pleasure end ≤ Max.</div><div style="display:flex;flex-direction:column;gap:.85rem">${Object.entries(e).map(([label,row])=>sliderRow(label,row)).join('')}</div><button onclick="saveElectro(this)" style="width:100%;margin-top:1.25rem;padding:.85rem;background:var(--red);border-radius:1rem;color:#fff">Save</button></div></div>`;
   document.getElementById('modal-container').appendChild(m);
 }
+/* enforce Min ≤ P-start ≤ P-end ≤ Max so sliders never cross */
+function clampElectro(input){
+  const rowEl=input.closest('[data-erow]'); if(!rowEl)return;
+  const get=k=>rowEl.querySelector(`[data-ek="${k}"]`);
+  let min=+get('min').value, ps=+get('pleasureStart').value, pe=+get('pleasureEnd').value, max=+get('max').value;
+  const k=input.dataset.ek;
+  if(k==='min'){ if(min>ps)get('pleasureStart').value=ps=min; if(ps>pe)get('pleasureEnd').value=pe=ps; if(pe>max)get('max').value=max=pe; }
+  else if(k==='pleasureStart'){ if(ps<min)get('min').value=min=ps; if(ps>pe)get('pleasureEnd').value=pe=ps; if(pe>max)get('max').value=max=pe; }
+  else if(k==='pleasureEnd'){ if(pe>max)get('max').value=max=pe; if(pe<ps)get('pleasureStart').value=ps=pe; if(ps<min)get('min').value=min=ps; }
+  else if(k==='max'){ if(max<pe)get('pleasureEnd').value=pe=max; if(pe<ps)get('pleasureStart').value=ps=pe; if(ps<min)get('min').value=min=ps; }
+  const ro=rowEl.querySelector('.e-readout'); if(ro)ro.textContent=`${min}–${max} · ♥ ${ps}–${pe}`;
+}
 function saveElectro(button){
-  document.querySelectorAll('[data-erow]').forEach(rowEl=>{ const label=rowEl.dataset.erow; const row=state.personalRecords.electro[label]||{}; rowEl.querySelectorAll('[data-ek]').forEach(inp=>{ row[inp.dataset.ek]=Number(inp.value)||0; }); state.personalRecords.electro[label]=row; });
+  document.querySelectorAll('[data-erow]').forEach(rowEl=>{ const label=rowEl.dataset.erow; const row={}; rowEl.querySelectorAll('[data-ek]').forEach(inp=>{ row[inp.dataset.ek]=Number(inp.value)||0; }); state.personalRecords.electro[label]=row; });
   saveState(); button.closest('.fixed').remove(); renderProtocols(); showToast('Saved','success');
 }
 function renderPunishments(){
