@@ -109,6 +109,41 @@ button{touch-action:manipulation}
 /* ===== ACTIVE TOGGLE STATES ===== */
 .tag-on{background:var(--red-2)!important;border-color:var(--red)!important;color:#fff!important}
 .qd-on{background:var(--sage-2)!important;border-color:var(--sage)!important;color:#fff!important}
+.stance-on{background:color-mix(in srgb,var(--sc) 30%,transparent)!important;border-color:var(--sc)!important;color:#fff!important}
+
+/* ===== SEGMENTED PROTOCOL SELECTOR ===== */
+.seg-scroll{-ms-overflow-style:none;scrollbar-width:none}
+.seg-scroll::-webkit-scrollbar{display:none}
+.seg-btn{display:inline-flex;align-items:center;gap:.4rem;white-space:nowrap;flex-shrink:0;padding:.5rem .95rem;border-radius:999px;font-size:.74rem;font-weight:500;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:var(--stone)}
+.seg-btn i{font-size:.8rem}
+.seg-btn.seg-on{background:var(--red-2);border-color:var(--red);color:#fff;box-shadow:0 6px 18px rgba(143,17,24,.3)}
+
+/* ===== SWITCH ===== */
+.switch{width:3rem;height:1.7rem;border-radius:999px;background:rgba(255,255,255,.14);position:relative;flex-shrink:0;transition:background .2s}
+.switch.on{background:var(--sage-2)}
+.switch .knob{position:absolute;top:.2rem;left:.2rem;width:1.3rem;height:1.3rem;border-radius:999px;background:#fff;transition:left .2s}
+.switch.on .knob{left:1.5rem}
+
+/* ===== RANGE SLIDERS (check-in) ===== */
+.ci-slider{-webkit-appearance:none;appearance:none;width:100%;height:.5rem;border-radius:999px;background:linear-gradient(90deg,var(--blue),var(--sage),var(--gold));outline:none;margin:.2rem 0}
+.ci-slider.rose{background:linear-gradient(90deg,var(--blue-2),var(--rose))}
+.ci-slider::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:1.35rem;height:1.35rem;border-radius:999px;background:#fff;border:3px solid var(--red);cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+.ci-slider::-moz-range-thumb{width:1.35rem;height:1.35rem;border-radius:999px;background:#fff;border:3px solid var(--red);cursor:pointer}
+.ci-slider:disabled{opacity:.85}
+.ci-slider:disabled::-webkit-slider-thumb{border-color:var(--stone)}
+
+/* ===== ANIMATED S-HALO LOGO ===== */
+.sys-logo{animation:slFloat 5s ease-in-out infinite}
+@keyframes slFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+.sl-arc{animation:slDraw 1.6s cubic-bezier(.6,.05,.2,1) forwards}
+.sl-bot{animation-delay:.25s}
+@keyframes slDraw{to{stroke-dashoffset:0}}
+.sl-dot{opacity:0;animation:slDotIn .5s ease forwards 1.5s,slDotPulse 2.2s ease-in-out infinite 2s}
+.sl-dot-s{animation-delay:1.75s,2.3s}
+@keyframes slDotIn{to{opacity:1}}
+@keyframes slDotPulse{0%,100%{filter:drop-shadow(0 0 2px currentColor)}50%{filter:drop-shadow(0 0 7px currentColor)}}
+.sl-blue{opacity:0;animation:slBlueIn .6s ease forwards 1.3s}
+@keyframes slBlueIn{to{opacity:1}}
 
 /* ===== RANGE / ELECTRO ===== */
 .range-track{height:.55rem;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden}
