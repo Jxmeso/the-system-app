@@ -6,7 +6,7 @@
 
 /* ── Version gate: forces one clean navigation when new build detected ── */
 (function(){
-  var BUILD='v5-20260628-14';
+  var BUILD='v5-20260628-15';
   try{
     if(localStorage.getItem('_sys_build')!==BUILD){
       try{localStorage.setItem('_sys_build',BUILD);}catch(_){}
@@ -119,10 +119,25 @@ function defaultSystemState(role){
     notifications:[],readNotifIds:[],disclosures:[],checkIns:[],badges:[],customBadges:[],dataVersion:6,
     hideHardLimits:false,auth:{configured:false},pinFails:0,appLock:{locked:false},forceJacobPinChange:false,
     voice:{enabled:false,samples:[]},
+    requests:[],helpers:[],memories:[],suggestions:[],suggestionBoxOpen:false,activeCheckIn:null,
     subProfile:defaultSubProfile(),bodyMaps:defaultBodyMaps(),personalRecords:defaultPersonalRecords(),
     appSettings:{reduceMotion:false,starSpending:true}
   };
 }
+/* Helper types — each with a strong, instantly-recognisable colour */
+const HELPER_TYPES = [
+  ['overthinking','Overthinking','fa-brain','#6d5ad6'],
+  ['refocusing','Refocusing','fa-bullseye','#2f8f7f'],
+  ['timeout','Time Out','fa-hourglass-half','#c77d3a'],
+  ['linewriting','Line Writing','fa-pen-nib','#315b7a']
+];
+/* Structured questions every request must answer */
+const REQUEST_QUESTIONS = [
+  ['who','Who will you be with?'],
+  ['where','Where will you be?'],
+  ['back','What time will you be home?'],
+  ['drinks','Any alcohol? How much?']
+];
 /* Dimensions Jacob rates 1–5 in a check-in (3 = just right) */
 const CHECKIN_DIMENSIONS = [
   ['control','Control','How much control you want me to take'],
@@ -226,6 +241,11 @@ function normalizeState(){
   if(!state.appLock) state.appLock={locked:false};
   if(!state.voice) state.voice={enabled:false,samples:[]};
   state.voice.samples=ensureArray(state.voice.samples);
+  state.requests=ensureArray(state.requests);
+  state.helpers=ensureArray(state.helpers);
+  state.memories=ensureArray(state.memories);
+  state.suggestions=ensureArray(state.suggestions);
+  if(typeof state.suggestionBoxOpen!=='boolean') state.suggestionBoxOpen=false;
   if(typeof state.hideHardLimits!=='boolean'){ state.hideHardLimits=false; }
   state.appSettings={reduceMotion:false,starSpending:true,...(state.appSettings||{})};
   if(typeof state.appSettings.starSpending!=='boolean'){ state.appSettings.starSpending=true; changed=true; }
@@ -665,6 +685,199 @@ async function runVoiceVerify(btn){
   setTimeout(()=>{ document.getElementById('voice-verify')?.remove(); const cb=window._voicePass; window._voicePass=null; if(cb)cb(); },1300);
 }
 
+/* ════════════ PHASE 6: DOM TOOLS ════════════ */
+/* ── James's dashboard launcher ── */
+function domToolsCard(){
+  const pendingReq=ensureArray(state.requests).filter(r=>r.status==='requested').length;
+  return `<button onclick="showDomTools()" class="tap card" style="display:flex;align-items:center;gap:.85rem;width:100%;text-align:left;padding:1rem 1.15rem;margin-bottom:1.25rem;border-left:3px solid var(--red)">
+    <span style="width:2.6rem;height:2.6rem;border-radius:1rem;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:rgba(143,17,24,.25);color:var(--red)"><i class="fa-solid fa-toolbox"></i></span>
+    <span style="flex:1"><span style="font-weight:600;display:block">James's Tools</span><span style="font-size:.75rem;color:var(--stone)">Tasks, check-in, helpers, memories, requests${pendingReq?` · ${pendingReq} request${pendingReq>1?'s':''}`:''}</span></span>
+    ${pendingReq?`<span style="min-width:1.4rem;height:1.4rem;border-radius:999px;background:var(--red);color:#fff;font-size:.7rem;display:flex;align-items:center;justify-content:center;padding:0 .3rem">${pendingReq}</span>`:`<i class="fa-solid fa-chevron-right" style="color:rgba(198,166,66,.4)"></i>`}
+  </button>`;
+}
+function showDomTools(){
+  const tools=[
+    ['fa-square-plus','Assign Task','var(--red)','showAddTaskModal()'],
+    ['fa-sliders','Send Check-In','var(--blue)','sendCheckIn()'],
+    ['fa-hands-holding-circle','Send Helper','var(--sage)','showSendHelper()'],
+    ['fa-clock-rotate-left','Send Memory','var(--rose)','showSendMemory()'],
+    ['fa-inbox','Requests','var(--gold)','showRequestsReview()'],
+    ['fa-lightbulb','Suggestion Box','var(--blue)','toggleSuggestionBox()'],
+    ['fa-clipboard-question','View Check-Ins','var(--sage)','showCheckInModal()']
+  ];
+  const m=document.createElement('div');
+  m.innerHTML=`<div class="fixed inset-0 bg-black/90 z-[150] flex items-end md:items-center justify-center" onclick="this.remove()"><div onclick="event.stopImmediatePropagation()" class="glass" style="width:100%;max-width:30rem;border-radius:2rem 2rem 0 0;padding:1.5rem;padding-bottom:max(1.5rem,env(safe-area-inset-bottom))">
+    <div style="font-size:1.3rem;font-weight:600;margin-bottom:1.25rem">James's Tools</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem">
+      ${tools.map(([ic,label,col,fn])=>`<button onclick="this.closest('.fixed').remove();${fn}" class="tap subtle-card" style="padding:1rem;text-align:left"><i class="fa-solid ${ic}" style="color:${col};font-size:1.2rem"></i><div style="font-weight:600;margin-top:.5rem;font-size:.85rem">${label}</div></button>`).join('')}
+    </div>
+    <div style="font-size:.7rem;color:var(--stone);margin-top:1rem">Suggestion box is ${state.suggestionBoxOpen?'<span style="color:var(--sage)">open</span>':'closed'}.${ensureArray(state.suggestions).filter(s=>!s.seen).length?` ${ensureArray(state.suggestions).filter(s=>!s.seen).length} new suggestion(s).`:''}</div>
+    ${ensureArray(state.suggestions).length?`<button onclick="this.closest('.fixed').remove();showSuggestions()" class="tap" style="width:100%;margin-top:.6rem;padding:.7rem;background:rgba(255,255,255,.05);border-radius:1rem;font-size:.82rem">View Jacob's suggestions (${state.suggestions.length})</button>`:''}
+  </div></div>`;
+  document.getElementById('modal-container').appendChild(m);
+}
+/* ── Jacob's active cards ── */
+function subActiveCards(){
+  let html='';
+  /* active check-in (Dom-sent, 10-min window) */
+  if(state.activeCheckIn&&!state.activeCheckIn.done){
+    const left=getTimeLeft({dueAt:state.activeCheckIn.dueAt});
+    html+=`<button onclick="showCheckInModal()" class="tap card" style="display:flex;align-items:center;gap:.85rem;width:100%;text-align:left;padding:1rem 1.15rem;margin-bottom:.75rem;border-left:3px solid var(--blue)"><span style="width:2.6rem;height:2.6rem;border-radius:1rem;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:rgba(49,91,122,.3);color:var(--blue)"><i class="fa-solid fa-sliders"></i></span><span style="flex:1"><span style="font-weight:600;display:block">Check-In from James</span><span style="font-size:.75rem;color:${left.text==='Overdue'?'var(--red)':'var(--stone)'}">Fill it in — ${left.text} left</span></span><i class="fa-solid fa-chevron-right" style="color:rgba(198,166,66,.4)"></i></button>`;
+  }
+  /* active helpers */
+  ensureArray(state.helpers).filter(h=>h.active).forEach(h=>{
+    const def=HELPER_TYPES.find(t=>t[0]===h.type)||['','Helper','fa-hands-holding-circle','#888'];
+    html+=`<button onclick="viewHelper('${h.id}')" class="tap card" style="display:flex;align-items:center;gap:.85rem;width:100%;text-align:left;padding:1rem 1.15rem;margin-bottom:.75rem;border-left:3px solid ${def[3]}"><span style="width:2.6rem;height:2.6rem;border-radius:1rem;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:${def[3]}33;color:${def[3]}"><i class="fa-solid ${def[2]}"></i></span><span style="flex:1"><span style="font-weight:600;display:block">${def[1]} — from James</span><span style="font-size:.75rem;color:var(--stone)">${escapeText(h.note||'Tap to read')}</span></span><i class="fa-solid fa-chevron-right" style="color:rgba(198,166,66,.4)"></i></button>`;
+  });
+  /* unviewed/active memories */
+  ensureArray(state.memories).filter(mm=>!mm.reflectionDone).forEach(mm=>{
+    html+=`<button onclick="viewMemory('${mm.id}')" class="tap card" style="display:flex;align-items:center;gap:.85rem;width:100%;text-align:left;padding:1rem 1.15rem;margin-bottom:.75rem;border-left:3px solid var(--rose)"><span style="width:2.6rem;height:2.6rem;border-radius:1rem;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:rgba(217,124,138,.25);color:var(--rose)"><i class="fa-solid fa-clock-rotate-left"></i></span><span style="flex:1"><span style="font-weight:600;display:block">Memory from James</span><span style="font-size:.75rem;color:var(--stone)">${mm.viewed?'Now reflect on it':'You must view this'}</span></span><i class="fa-solid fa-chevron-right" style="color:rgba(198,166,66,.4)"></i></button>`;
+  });
+  /* suggestion box open */
+  if(state.suggestionBoxOpen){
+    html+=`<button onclick="showSuggestPunishment()" class="tap card" style="display:flex;align-items:center;gap:.85rem;width:100%;text-align:left;padding:1rem 1.15rem;margin-bottom:.75rem;border-left:3px solid var(--gold)"><span style="width:2.6rem;height:2.6rem;border-radius:1rem;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:rgba(198,166,66,.2);color:var(--gold)"><i class="fa-solid fa-lightbulb"></i></span><span style="flex:1"><span style="font-weight:600;display:block">Suggest a consequence</span><span style="font-size:.75rem;color:var(--stone)">Only taken into consideration by James</span></span><i class="fa-solid fa-chevron-right" style="color:rgba(198,166,66,.4)"></i></button>`;
+  }
+  /* make a request — always available */
+  html+=`<button onclick="showMakeRequest()" class="tap card" style="display:flex;align-items:center;gap:.85rem;width:100%;text-align:left;padding:1rem 1.15rem;margin-bottom:1.25rem;border-left:3px solid var(--gold)"><span style="width:2.6rem;height:2.6rem;border-radius:1rem;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:rgba(198,166,66,.2);color:var(--gold)"><i class="fa-solid fa-hand"></i></span><span style="flex:1"><span style="font-weight:600;display:block">Make a request</span><span style="font-size:.75rem;color:var(--stone)">Ask James for something out of routine</span></span><i class="fa-solid fa-chevron-right" style="color:rgba(198,166,66,.4)"></i></button>`;
+  if(!html) return '';
+  return `<div style="margin-bottom:.5rem">${html}</div>`;
+}
+/* ── Dynamic check-in: James sends, Jacob has 10 minutes ── */
+function sendCheckIn(){
+  if(state.currentRole!=='dom')return;
+  state.activeCheckIn={sentAt:new Date().toISOString(),dueAt:new Date(Date.now()+10*60000).toISOString(),done:false};
+  addNotification('task','James has sent you a check-in','Fill it in within 10 minutes.','dashboard');
+  saveState(); showToast('Check-in sent to Jacob','success'); renderDashboard();
+}
+/* ── Helpers ── */
+function showSendHelper(){
+  if(state.currentRole!=='dom')return;
+  const m=document.createElement('div');
+  m.innerHTML=`<div class="fixed inset-0 bg-black/90 z-[150] flex items-end md:items-center justify-center" onclick="this.remove()"><div onclick="event.stopImmediatePropagation()" class="glass" style="width:100%;max-width:28rem;border-radius:2rem 2rem 0 0;padding:1.5rem;padding-bottom:max(1.5rem,env(safe-area-inset-bottom))"><div style="font-size:1.25rem;font-weight:600;margin-bottom:1rem">Send a Helper</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem">${HELPER_TYPES.map(([id,label,icon,col])=>`<button onclick="document.querySelectorAll('#helper-pick button').forEach(x=>x.style.outline='none');this.style.outline='2px solid ${col}';window._helperPick='${id}'" data-h="${id}" class="tap subtle-card" style="padding:1rem;text-align:left"><i class="fa-solid ${icon}" style="color:${col};font-size:1.3rem"></i><div style="font-weight:600;margin-top:.5rem;font-size:.85rem">${label}</div></button>`).join('')}</div><div id="helper-pick"></div><textarea id="helper-note" rows="3" class="beautiful-input" style="width:100%;padding:.85rem 1rem;border-radius:1rem;resize:none;margin-top:.85rem" placeholder="A short note for Jacob (optional)"></textarea><button onclick="sendHelper(this)" style="width:100%;margin-top:1rem;padding:.85rem;background:var(--red);border-radius:1rem;color:#fff">Send to Jacob</button></div></div>`;
+  document.getElementById('modal-container').appendChild(m);
+}
+function sendHelper(button){
+  const type=window._helperPick; if(!type)return alert('Pick a helper type.');
+  const def=HELPER_TYPES.find(t=>t[0]===type);
+  state.helpers.unshift({id:'h'+Date.now(),type,note:document.getElementById('helper-note').value.trim(),active:true,sentAt:new Date().toISOString()});
+  addNotification('task','James has sent you a helper',def[1],'dashboard');
+  window._helperPick=null; saveState(); button.closest('.fixed').remove(); renderDashboard(); showToast('Helper sent','success');
+}
+function viewHelper(id){
+  const h=ensureArray(state.helpers).find(x=>x.id===id); if(!h)return;
+  const def=HELPER_TYPES.find(t=>t[0]===h.type)||['','Helper','fa-hands-holding-circle','#888'];
+  const isDom=state.currentRole==='dom';
+  const m=document.createElement('div');
+  m.innerHTML=`<div class="fixed inset-0 bg-black/90 z-[150] flex items-center justify-center p-6" onclick="this.remove()"><div onclick="event.stopImmediatePropagation()" class="glass" style="max-width:22rem;width:100%;border-radius:2rem;padding:2rem 1.75rem;text-align:center;border-top:4px solid ${def[3]}"><i class="fa-solid ${def[2]}" style="font-size:3rem;color:${def[3]}"></i><div style="font-size:1.4rem;font-weight:600;margin-top:1rem">${def[1]}</div><div style="font-size:.9rem;color:var(--stone);margin-top:.75rem;white-space:pre-wrap">${escapeText(h.note||'Take a moment. James is helping you with this.')}</div><button onclick="dismissHelper('${id}',this)" style="width:100%;margin-top:1.5rem;padding:.85rem;background:${def[3]};border-radius:1rem;color:#fff">${isDom?'Close':'Done'}</button></div></div>`;
+  document.getElementById('modal-container').appendChild(m);
+}
+function dismissHelper(id,button){ const h=ensureArray(state.helpers).find(x=>x.id===id); if(h&&state.currentRole==='sub'){ h.active=false; saveState(); } button.closest('.fixed').remove(); renderDashboard(); }
+/* ── Send Memory ── */
+function showSendMemory(){
+  if(state.currentRole!=='dom')return;
+  const items=ensureArray(state.evidence).flatMap(e=>ensureArray(e.items).filter(i=>i.url).map(i=>({...i,from:e.title,date:e.date})));
+  const m=document.createElement('div');
+  m.innerHTML=`<div class="fixed inset-0 bg-black/90 z-[150] flex items-end md:items-center justify-center" onclick="this.remove()"><div onclick="event.stopImmediatePropagation()" class="glass" style="width:100%;max-width:30rem;max-height:90vh;overflow:auto;border-radius:2rem 2rem 0 0;padding:1.5rem;padding-bottom:max(1.5rem,env(safe-area-inset-bottom))"><div style="font-size:1.25rem;font-weight:600;margin-bottom:.3rem">Send a Memory</div><div style="font-size:.75rem;color:var(--stone);margin-bottom:1rem">Pick a past piece of evidence. Jacob must view it, then reflect.</div>${items.length?`<div style="display:flex;flex-direction:column;gap:.5rem">${items.map((it,idx)=>`<button onclick="sendMemory(${idx})" class="tap subtle-card" style="padding:.85rem 1rem;text-align:left;display:flex;justify-content:space-between;align-items:center"><span style="font-size:.85rem"><i class="fa-solid ${it.type==='video'?'fa-video':it.type==='voice'?'fa-microphone':it.type==='photo'?'fa-image':'fa-paperclip'}" style="margin-right:.5rem;color:var(--rose)"></i>${titleCase(it.type)} · ${escapeText(it.from||'')}</span><span style="font-size:.7rem;color:var(--stone)">${formatUKDate(it.date)}</span></button>`).join('')}</div>`:`<div style="font-size:.85rem;opacity:.6;padding:1rem 0">No past evidence yet.</div>`}<div id="memlist-data" style="display:none"></div></div></div>`;
+  document.getElementById('modal-container').appendChild(m);
+  window._memItems=items;
+}
+function sendMemory(idx){
+  const it=(window._memItems||[])[idx]; if(!it)return;
+  state.memories.unshift({id:'m'+Date.now(),item:it,sentAt:new Date().toISOString(),viewed:false,reflectionDone:false});
+  addNotification('task','James has sent you a memory','You must view it and reflect.','dashboard');
+  saveState(); document.querySelectorAll('.fixed').forEach(x=>x.remove()); showToast('Memory sent','success'); renderDashboard();
+}
+function viewMemory(id){
+  const mm=ensureArray(state.memories).find(x=>x.id===id); if(!mm)return;
+  const it=mm.item; mm.viewed=true; saveState();
+  const media=it.type==='video'?`<video src="${it.url}" controls autoplay playsinline style="width:100%;border-radius:1rem;max-height:55vh"></video>`
+    :it.type==='photo'?`<img src="${it.url}" style="width:100%;border-radius:1rem">`
+    :it.type==='voice'?`<audio src="${it.url}" controls autoplay style="width:100%"></audio>`
+    :`<a href="${it.url}" target="_blank" rel="noopener" style="color:var(--gold)">Open evidence</a>`;
+  const m=document.createElement('div');
+  m.innerHTML=`<div class="fixed inset-0 z-[200] flex items-end md:items-center justify-center" style="background:rgba(0,0,0,.95)" onclick="this.remove()"><div onclick="event.stopImmediatePropagation()" class="glass" style="width:100%;max-width:34rem;max-height:94vh;overflow:auto;border-radius:2rem 2rem 0 0;padding:1.5rem;padding-bottom:max(1.5rem,env(safe-area-inset-bottom))"><div style="font-size:.65rem;letter-spacing:3px;color:var(--rose)">MEMORY FROM JAMES</div><div style="margin:1rem 0">${media}</div>${state.currentRole==='sub'?`<div style="font-size:.7rem;color:var(--gold);margin-bottom:.4rem">REFLECT — what does this bring up for you?</div><textarea id="mem-reflect" rows="4" onpaste="return false" class="beautiful-input no-paste" style="width:100%;padding:.85rem 1rem;border-radius:1rem;resize:none" placeholder="Write your reflection for James…"></textarea><button onclick="submitMemoryReflection('${id}',this)" style="width:100%;margin-top:1rem;padding:.85rem;background:var(--red);border-radius:1rem;color:#fff">Send reflection to James</button>`:`<div style="font-size:.85rem;color:var(--stone)">${mm.reflection?'<b>Jacob:</b> '+escapeText(mm.reflection):'No reflection yet.'}</div>`}<button onclick="this.closest('.fixed').remove()" style="width:100%;margin-top:.5rem;padding:.6rem;color:var(--stone);font-size:.8rem">Close</button></div></div>`;
+  document.getElementById('modal-container').appendChild(m);
+  renderDashboard();
+}
+function submitMemoryReflection(id,button){
+  const mm=ensureArray(state.memories).find(x=>x.id===id); if(!mm)return;
+  const val=document.getElementById('mem-reflect').value.trim(); if(!val)return alert('Write a reflection first.');
+  mm.reflection=val; mm.reflectionDone=true; mm.reflectedAt=new Date().toISOString();
+  addNotification('review','Jacob reflected on a memory','You need to review this.','dashboard');
+  saveState(); button.closest('.fixed').remove(); renderDashboard(); showToast('Reflection sent','success');
+}
+/* ── Suggestion box ── */
+function toggleSuggestionBox(){ if(state.currentRole!=='dom')return; state.suggestionBoxOpen=!state.suggestionBoxOpen; saveState(); showToast('Suggestion box '+(state.suggestionBoxOpen?'opened':'closed'),'success'); renderDashboard(); }
+function showSuggestPunishment(){
+  const m=document.createElement('div');
+  m.innerHTML=`<div class="fixed inset-0 bg-black/90 z-[150] flex items-end md:items-center justify-center" onclick="this.remove()"><div onclick="event.stopImmediatePropagation()" class="glass" style="width:100%;max-width:28rem;border-radius:2rem 2rem 0 0;padding:1.5rem;padding-bottom:max(1.5rem,env(safe-area-inset-bottom))"><div style="font-size:1.25rem;font-weight:600;margin-bottom:.3rem">Suggest a Consequence</div><div style="font-size:.75rem;color:var(--stone);margin-bottom:1rem">This is only taken into consideration. James decides.</div><textarea id="sugg-text" rows="4" onpaste="return false" class="beautiful-input no-paste" style="width:100%;padding:.85rem 1rem;border-radius:1rem;resize:none" placeholder="What do you think would be fair…"></textarea><button onclick="submitSuggestion(this)" style="width:100%;margin-top:1rem;padding:.85rem;background:var(--red);border-radius:1rem;color:#fff">Submit suggestion</button></div></div>`;
+  document.getElementById('modal-container').appendChild(m);
+}
+function submitSuggestion(button){
+  const val=document.getElementById('sugg-text').value.trim(); if(!val)return alert('Write a suggestion first.');
+  state.suggestions.unshift({id:'sg'+Date.now(),text:val,at:new Date().toISOString(),seen:false});
+  addNotification('review','Jacob suggested a consequence','Taken into consideration.','dashboard');
+  saveState(); button.closest('.fixed').remove(); showToast('Suggestion submitted','success');
+}
+function showSuggestions(){
+  if(state.currentRole!=='dom')return;
+  ensureArray(state.suggestions).forEach(s=>s.seen=true); saveState();
+  const m=document.createElement('div');
+  m.innerHTML=`<div class="fixed inset-0 bg-black/90 z-[150] flex items-end md:items-center justify-center" onclick="this.remove()"><div onclick="event.stopImmediatePropagation()" class="glass" style="width:100%;max-width:30rem;max-height:88vh;overflow:auto;border-radius:2rem 2rem 0 0;padding:1.5rem;padding-bottom:max(1.5rem,env(safe-area-inset-bottom))"><div style="font-size:1.25rem;font-weight:600;margin-bottom:1rem">Jacob's Suggestions</div><div style="display:flex;flex-direction:column;gap:.6rem">${ensureArray(state.suggestions).map(s=>`<div class="subtle-card" style="padding:.85rem 1rem"><div style="font-size:.85rem;white-space:pre-wrap">${escapeText(s.text)}</div><div style="font-size:.65rem;color:var(--stone);margin-top:.35rem">${formatUKDate(s.at)} · ${formatUKTime(s.at)}</div></div>`).join('')||'<div style="opacity:.6">No suggestions.</div>'}</div></div></div>`;
+  document.getElementById('modal-container').appendChild(m);
+}
+/* ── Requests ── */
+function showMakeRequest(){
+  const tomorrow=new Date(Date.now()+86400000).toISOString().slice(0,10);
+  const m=document.createElement('div');
+  m.innerHTML=`<div class="fixed inset-0 bg-black/90 z-[150] flex items-end md:items-center justify-center" onclick="this.remove()"><div onclick="event.stopImmediatePropagation()" class="glass" style="width:100%;max-width:30rem;max-height:92vh;overflow:auto;border-radius:2rem 2rem 0 0;padding:1.5rem;padding-bottom:max(1.5rem,env(safe-area-inset-bottom))"><div style="font-size:1.25rem;font-weight:600;margin-bottom:.3rem">Make a Request</div><div style="font-size:.75rem;color:var(--stone);margin-bottom:1rem">Keep it short — about 10 words. James decides.</div>
+    <input id="req-text" maxlength="80" class="beautiful-input" style="width:100%;padding:.85rem 1rem;border-radius:1rem;margin-bottom:.75rem" placeholder="e.g. Night out with friends Saturday">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-bottom:.75rem"><label style="font-size:.62rem;color:var(--stone)">DATE<input id="req-date" type="date" value="${tomorrow}" class="beautiful-input" style="width:100%;padding:.6rem;border-radius:.7rem;margin-top:.15rem;display:block"></label><label style="font-size:.62rem;color:var(--stone)">TIME<input id="req-time" type="time" class="beautiful-input" style="width:100%;padding:.6rem;border-radius:.7rem;margin-top:.15rem;display:block"></label></div>
+    ${REQUEST_QUESTIONS.map(([k,q])=>`<label style="font-size:.65rem;color:rgba(198,166,66,.7);display:block;margin-bottom:.6rem">${q}<input data-rq="${k}" class="beautiful-input" style="width:100%;padding:.7rem 1rem;border-radius:1rem;margin-top:.2rem;display:block"></label>`).join('')}
+    <textarea id="req-comments" rows="2" class="beautiful-input" style="width:100%;padding:.85rem 1rem;border-radius:1rem;resize:none" placeholder="Optional comments"></textarea>
+    <button onclick="submitRequest(this)" style="width:100%;margin-top:1rem;padding:.85rem;background:var(--red);border-radius:1rem;color:#fff">Send to James</button>
+  </div></div>`;
+  document.getElementById('modal-container').appendChild(m);
+}
+function submitRequest(button){
+  const text=document.getElementById('req-text').value.trim(); if(!text)return alert('Describe your request.');
+  const answers={}; document.querySelectorAll('[data-rq]').forEach(el=>answers[el.dataset.rq]=el.value.trim());
+  state.requests.unshift({id:'rq'+Date.now(),text,date:document.getElementById('req-date').value,time:document.getElementById('req-time').value,answers,comments:document.getElementById('req-comments').value.trim(),status:'requested',createdAt:new Date().toISOString(),archived:false});
+  addNotification('review','Jacob submitted a request',text,'dashboard');
+  saveState(); button.closest('.fixed').remove(); showToast('Request sent to James','success'); renderDashboard();
+}
+function showRequestsReview(){
+  const isDom=state.currentRole==='dom';
+  const live=ensureArray(state.requests).filter(r=>!r.archived);
+  const archived=ensureArray(state.requests).filter(r=>r.archived);
+  const m=document.createElement('div');
+  m.innerHTML=`<div class="fixed inset-0 bg-black/90 z-[150] flex items-end md:items-center justify-center" onclick="this.remove()"><div onclick="event.stopImmediatePropagation()" class="glass" style="width:100%;max-width:32rem;max-height:90vh;overflow:auto;border-radius:2rem 2rem 0 0;padding:1.5rem;padding-bottom:max(1.5rem,env(safe-area-inset-bottom))"><div style="font-size:1.25rem;font-weight:600;margin-bottom:1rem">Requests</div>
+    <div style="display:flex;flex-direction:column;gap:.6rem">${live.length?live.map(r=>requestCard(r,isDom)).join(''):'<div style="opacity:.6">No open requests.</div>'}</div>
+    ${isDom&&archived.length?`<div style="font-size:.62rem;letter-spacing:2px;color:var(--stone);margin:1.25rem 0 .5rem">ARCHIVE</div><div style="display:flex;flex-direction:column;gap:.5rem">${archived.map(r=>requestCard(r,false,true)).join('')}</div>`:''}
+  </div></div>`;
+  document.getElementById('modal-container').appendChild(m);
+}
+function requestCard(r,isDom,archived){
+  const col=r.status==='approved'?'var(--sage)':r.status==='denied'?'var(--red)':'var(--gold)';
+  const ans=Object.entries(r.answers||{}).map(([k,v])=>v?`<div style="font-size:.72rem;color:var(--stone)"><b>${(REQUEST_QUESTIONS.find(q=>q[0]===k)||[,k])[1]}</b> ${escapeText(v)}</div>`:'').join('');
+  return `<div class="subtle-card" style="padding:1rem;border-left:3px solid ${col};${archived?'opacity:.7':''}">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start"><div style="font-weight:600">${escapeText(r.text)}</div><span class="pill" style="font-size:.6rem;padding:.2rem .6rem;color:${col};text-transform:capitalize">${r.status}</span></div>
+    <div style="font-size:.72rem;color:rgba(198,166,66,.7);margin-top:.25rem">${formatUKDate(r.date)} ${r.time||''}</div>
+    ${ans?`<div style="margin-top:.5rem;display:flex;flex-direction:column;gap:.15rem">${ans}</div>`:''}
+    ${r.comments?`<div style="font-size:.72rem;color:var(--stone);margin-top:.4rem;font-style:italic">"${escapeText(r.comments)}"</div>`:''}
+    ${r.response?`<div style="font-size:.75rem;color:${col};margin-top:.5rem"><b>James:</b> ${escapeText(r.response)}</div>`:''}
+    ${isDom&&r.status==='requested'?`<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.4rem;margin-top:.7rem"><button onclick="respondRequest('${r.id}','approved')" class="tap" style="padding:.5rem;background:var(--sage-2);border-radius:.7rem;color:#fff;font-size:.75rem">Yes</button><button onclick="respondRequest('${r.id}','denied')" class="tap" style="padding:.5rem;background:rgba(143,17,24,.3);border-radius:.7rem;color:var(--rose);font-size:.75rem">No</button><button onclick="respondRequest('${r.id}','propose')" class="tap" style="padding:.5rem;background:rgba(255,255,255,.06);border-radius:.7rem;font-size:.75rem">Propose</button></div>`:''}
+  </div>`;
+}
+function respondRequest(id,kind){
+  const r=ensureArray(state.requests).find(x=>x.id===id); if(!r)return;
+  if(kind==='propose'){ const alt=prompt('Propose an alternative for Jacob:'); if(!alt)return; r.status='approved'; r.response='Alternative: '+alt.trim(); addNotification('task','James proposed an alternative',r.text,'dashboard'); }
+  else if(kind==='approved'){ r.status='approved'; r.response='Approved.'; addNotification('reward','James approved your request',r.text,'dashboard'); }
+  else { r.status='denied'; r.response='Denied.'; addNotification('consequence','James denied your request',r.text,'dashboard'); }
+  r.archived=true; saveState();
+  document.querySelectorAll('.fixed').forEach(x=>x.remove()); showRequestsReview(); renderDashboard();
+}
+
 /* ── Dashboard — FULL REBUILD ── */
 function renderDashboard(){
   const tab=document.getElementById('tab-dashboard'); if(!tab)return;
@@ -693,11 +906,7 @@ function renderDashboard(){
       <button onclick="activeProtocolPanel='consequences';navigateToTab('protocols')" style="font-size:.7rem;text-decoration:underline;color:rgba(198,166,66,.7);margin-top:.5rem">View details</button>
     </div>`:`<div id="active-punishment-banner" class="hidden"></div>`}
 
-    <button onclick="showCheckInModal()" class="tap card" style="display:flex;align-items:center;gap:.85rem;width:100%;text-align:left;padding:1rem 1.15rem;margin-bottom:1.25rem;border-left:3px solid var(--blue)">
-      <span style="width:2.6rem;height:2.6rem;border-radius:1rem;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:rgba(49,91,122,.3);color:var(--blue)"><i class="fa-solid fa-sliders"></i></span>
-      <span style="flex:1"><span style="font-weight:600;display:block">Dynamic Check-In</span><span style="font-size:.75rem;color:var(--stone)">${isDom?'Review how Jacob is feeling':'Tell James what you need — more or less'}${lastCheckInLabel()}</span></span>
-      <i class="fa-solid fa-chevron-right" style="color:rgba(198,166,66,.4)"></i>
-    </button>
+    ${isDom?domToolsCard():subActiveCards()}
 
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem;margin-bottom:2rem">
       <div class="card" style="padding:1rem;text-align:center">
@@ -1567,6 +1776,7 @@ function saveCheckIn(button){
   state.checkIns=ensureArray(state.checkIns);
   state.checkIns.unshift({id:Date.now(),date:new Date().toISOString(),by:state.currentRole,scores,kinks});
   if(state.checkIns.length>30) state.checkIns.length=30;
+  if(state.activeCheckIn) state.activeCheckIn.done=true;
   addNotification('review','New check-in from Jacob','Jacob shared how he wants the dynamic tuned.','dashboard');
   saveState(); button.closest('.fixed').remove(); renderDashboard(); showToast('Check-in sent','success');
 }
