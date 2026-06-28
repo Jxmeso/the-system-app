@@ -6,7 +6,7 @@
 
 /* ── Version gate: forces one clean navigation when new build detected ── */
 (function(){
-  var BUILD='v5-20260628-10';
+  var BUILD='v5-20260628-11';
   try{
     if(localStorage.getItem('_sys_build')!==BUILD){
       try{localStorage.setItem('_sys_build',BUILD);}catch(_){}
@@ -117,7 +117,7 @@ function defaultSystemState(role){
       outOfSession:'1. Boundaries remain active.\n2. Check-ins remain private.\n3. No public assumptions.'
     },
     notifications:[],readNotifIds:[],disclosures:[],checkIns:[],badges:[],customBadges:[],dataVersion:6,
-    hideHardLimits:false,
+    hideHardLimits:false,auth:{configured:false},pinFails:0,appLock:{locked:false},forceJacobPinChange:false,
     subProfile:defaultSubProfile(),bodyMaps:defaultBodyMaps(),personalRecords:defaultPersonalRecords(),
     appSettings:{reduceMotion:false,starSpending:true}
   };
@@ -220,6 +220,9 @@ function normalizeState(){
   state.readNotifIds=ensureArray(state.readNotifIds);
   state.customBadges=ensureArray(state.customBadges);
   state.checkIns=ensureArray(state.checkIns);
+  if(!state.auth) state.auth={configured:false};
+  if(typeof state.pinFails!=='number') state.pinFails=0;
+  if(!state.appLock) state.appLock={locked:false};
   if(typeof state.hideHardLimits!=='boolean'){ state.hideHardLimits=false; }
   state.appSettings={reduceMotion:false,starSpending:true,...(state.appSettings||{})};
   if(typeof state.appSettings.starSpending!=='boolean'){ state.appSettings.starSpending=true; changed=true; }
@@ -296,29 +299,87 @@ function buildKeypad(){
   screen.innerHTML=`<div style="max-width:22rem;width:100%;padding:0 1.75rem;text-align:center">
     <div style="display:flex;justify-content:center;margin-bottom:1rem">${systemLogoSVG(120)}</div>
     <h1 class="heading-serif" style="font-size:3.5rem;line-height:1;margin:0">The System</h1>
-    <p style="color:var(--gold);margin-top:.5rem;letter-spacing:3px;font-size:.75rem">PRIVATE ACCESS</p>
-    <div id="pin-dots" style="display:flex;justify-content:center;gap:1rem;margin:2rem 0">${[0,1,2,3].map(()=>`<span class="pin-dot" style="width:1rem;height:1rem;border-radius:999px;border:1.5px solid rgba(198,166,66,.55);display:inline-block"></span>`).join('')}</div>
+    <p style="color:var(--gold);margin-top:.5rem;letter-spacing:3px;font-size:.75rem">${(state.appLock&&state.appLock.locked)?'LOCKED':'PRIVATE ACCESS'}</p>
+    ${(state.appLock&&state.appLock.locked)?`<div style="margin:1rem auto 0;max-width:18rem;padding:.6rem .9rem;border-radius:.9rem;background:rgba(143,17,24,.2);border:1px solid rgba(143,17,24,.5);font-size:.72rem;color:#fca5a5">${escapeText(state.appLock.reason||"Awaiting James's judgement")}</div>`:''}
+    <div id="pin-dots" style="display:flex;justify-content:center;gap:.7rem;margin:1.75rem 0">${[0,1,2,3,4,5].map(()=>`<span class="pin-dot" style="width:.85rem;height:.85rem;border-radius:999px;border:1.5px solid rgba(198,166,66,.55);display:inline-block"></span>`).join('')}</div>
     <p id="login-error" style="color:#f87171;font-size:.8rem;height:1.2rem;margin-bottom:.5rem"></p>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem">${[1,2,3,4,5,6,7,8,9].map(n=>`<button class="tap" onclick="keypadPress('${n}')" style="aspect-ratio:1.35;font-size:1.5rem;border-radius:1.25rem;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.12);color:var(--ivory);display:flex;align-items:center;justify-content:center">${n}</button>`).join('')}<button class="tap" onclick="keypadClear()" style="aspect-ratio:1.35;font-size:.8rem;border-radius:1.25rem;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.12);color:var(--ivory);letter-spacing:.05em">CLEAR</button><button class="tap" onclick="keypadPress('0')" style="aspect-ratio:1.35;font-size:1.5rem;border-radius:1.25rem;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.12);color:var(--ivory)">0</button><button class="tap" onclick="keypadBack()" style="aspect-ratio:1.35;font-size:1.25rem;border-radius:1.25rem;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.12);color:var(--ivory)"><i class="fa-solid fa-delete-left"></i></button></div>
-    <button onclick="showInstallGuide()" style="margin-top:1.75rem;font-size:.7rem;color:rgba(198,166,66,.6);text-decoration:underline">Install Help</button>
+    <button onclick="forgotPin()" style="margin-top:1.5rem;font-size:.72rem;color:rgba(198,166,66,.7);text-decoration:underline">I've forgotten my PIN</button>
+    <button onclick="showInstallGuide()" style="display:block;margin:.75rem auto 0;font-size:.7rem;color:rgba(198,166,66,.5);text-decoration:underline">Install Help</button>
   </div>`;
   window.currentPin='';
 }
-function keypadPress(d){ if((window.currentPin||'').length>=4)return; window.currentPin=(window.currentPin||'')+d; updatePinDots(); if(window.currentPin.length===4)setTimeout(attemptLogin,140); }
+/* ════════════ PHASE 4: PIN SECURITY ════════════
+   6-digit PIN, PBKDF2 salted hash (never plaintext, never in repo), weak-PIN
+   rejection, 5-attempt lockout, forgotten-PIN request, James-forced reset.
+   Bootstrap codes only work until James sets real PINs — and a recovery path
+   (Settings → Reset access) means nobody can be permanently locked out. */
+const BOOTSTRAP_DOM='000000', BOOTSTRAP_SUB='111111';
+const PIN_ITER=120000;
+function _hex(buf){ return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join(''); }
+function _randSaltHex(){ const a=new Uint8Array(16); (crypto.getRandomValues?crypto:window.crypto).getRandomValues(a); return _hex(a.buffer); }
+async function pbkdf2(pin,saltHex,iter){
+  const enc=new TextEncoder();
+  const salt=new Uint8Array(saltHex.match(/.{2}/g).map(h=>parseInt(h,16)));
+  const key=await crypto.subtle.importKey('raw',enc.encode(pin),{name:'PBKDF2'},false,['deriveBits']);
+  const bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt,iterations:iter||PIN_ITER,hash:'SHA-256'},key,256);
+  return _hex(bits);
+}
+async function makePinRecord(pin){ const salt=_randSaltHex(); const hash=await pbkdf2(pin,salt,PIN_ITER); return {salt,hash,iter:PIN_ITER}; }
+async function verifyPin(pin,rec){ if(!rec||!rec.salt||!rec.hash)return false; const h=await pbkdf2(pin,rec.salt,rec.iter||PIN_ITER); return h===rec.hash; }
+function isWeakPin(pin){
+  if(!/^\d{6}$/.test(pin)) return true;
+  const banned=['000000','111111','222222','333333','444444','555555','666666','777777','888888','999999','123456','654321','121212','112233','123123','456789','987654','159753','147258'];
+  if(banned.includes(pin)) return true;
+  if(/^(\d)\1{5}$/.test(pin)) return true;                 // repeated digit
+  const d=pin.split('').map(Number);
+  if(d.every((n,i)=>i===0||n===d[i-1]+1)) return true;     // ascending
+  if(d.every((n,i)=>i===0||n===d[i-1]-1)) return true;     // descending
+  if(/^(\d\d)\1\1$/.test(pin)) return true;                // 2-digit repeat e.g. 121212
+  // obvious date patterns DDMMYY / MMDDYY-ish: first two 01-31 and a 19/20 century not required; flag 19xx/20xx anywhere
+  if(/^(19|20)\d{4}$/.test(pin)) return true;
+  return false;
+}
+function weakPinReason(pin){ if(!/^\d{6}$/.test(pin)) return 'PIN must be exactly 6 digits.'; return 'That PIN is too easy to guess. Choose something stronger.'; }
+function authConfigured(){ return !!(state.auth&&state.auth.configured&&state.auth.james&&state.auth.jacob); }
+
+function keypadPress(d){ if((window.currentPin||'').length>=6)return; window.currentPin=(window.currentPin||'')+d; updatePinDots(); if(window.currentPin.length===6)setTimeout(attemptLogin,140); }
 function keypadClear(){ window.currentPin=''; updatePinDots(); const e=document.getElementById('login-error'); if(e)e.textContent=''; }
 function keypadBack(){ window.currentPin=(window.currentPin||'').slice(0,-1); updatePinDots(); }
 function updatePinDots(){
   document.querySelectorAll('#pin-dots span').forEach((dot,i)=>{
     dot.style.background=i<(window.currentPin||'').length?'var(--gold)':'transparent';
-    dot.style.boxShadow=i<(window.currentPin||'').length?'0 0 18px rgba(198,166,66,.4)':'none';
+    dot.style.boxShadow=i<(window.currentPin||'').length?'0 0 16px rgba(198,166,66,.4)':'none';
     dot.style.border=i<(window.currentPin||'').length?'1.5px solid var(--gold)':'1.5px solid rgba(198,166,66,.55)';
   });
 }
-function attemptLogin(){
-  const input=window.currentPin||document.getElementById('passcode-input')?.value?.trim()||'';
-  const role=input==='0000'?'dom':input==='1111'?'sub':null;
-  if(!role){ const e=document.getElementById('login-error'); if(e)e.textContent='Incorrect code'; window.currentPin=''; updatePinDots(); return; }
-  state.currentRole=role; saveState();
+function _loginError(msg){ const e=document.getElementById('login-error'); if(e)e.textContent=msg; window.currentPin=''; updatePinDots(); }
+async function attemptLogin(){
+  const input=window.currentPin||'';
+  const locked=state.appLock&&state.appLock.locked;
+  let role=null;
+  if(authConfigured()){
+    if(await verifyPin(input,state.auth.james)) role='dom';
+    else if(await verifyPin(input,state.auth.jacob)) role='sub';
+  } else {
+    if(input===BOOTSTRAP_DOM) role='dom';
+    else if(input===BOOTSTRAP_SUB) role='sub';
+  }
+  if(!role){
+    state.pinFails=(state.pinFails||0)+1;
+    if(state.pinFails>=5){
+      state.appLock={locked:true,reason:'Access locked. Awaiting James'+String.fromCharCode(8217)+'s judgement.',at:new Date().toISOString()};
+      addNotification('review','Jacob failed PIN entry 5 times','Access is locked until you release it.','dashboard');
+      saveState(); buildKeypad(); _loginError('Too many failed attempts.');
+    } else { saveState(); _loginError('Incorrect PIN. '+(5-state.pinFails)+' left.'); }
+    return;
+  }
+  /* Locked: only James can release */
+  if(locked){
+    if(role!=='dom'){ _loginError("Awaiting James"+String.fromCharCode(8217)+'s judgement.'); return; }
+    state.appLock={locked:false}; addNotification('review','Lock released by James','Access restored.','dashboard');
+  }
+  state.pinFails=0; state.currentRole=role; saveState();
   document.getElementById('login-screen').style.display='none';
   document.getElementById('main-app').style.display='';
   document.getElementById('main-app').classList.remove('hidden');
@@ -326,6 +387,40 @@ function attemptLogin(){
   updateRoleUI();
   navigateToTab(new URLSearchParams(location.search).get('tab')||'dashboard');
   try{ enablePushNotifications(); }catch(_){}
+  /* First run: James must set real 6-digit PINs */
+  if(!authConfigured()&&role==='dom') setTimeout(()=>showPinSetup(true),400);
+  else if(role==='dom'&&state.forceJacobPinChange) setTimeout(()=>showToast('Reminder: Jacob still needs to change his PIN','info'),600);
+}
+function forgotPin(){
+  state.appLock={locked:true,reason:'PIN reset requested. Awaiting James'+String.fromCharCode(8217)+'s judgement.',at:new Date().toISOString()};
+  addNotification('review','Jacob requested PIN release','Jacob pressed “forgotten PIN”. Release or reset from Settings.','dashboard');
+  saveState(); buildKeypad(); _loginError('Request sent to James.');
+}
+/* ── PIN setup / change (James) ── */
+function showPinSetup(initial){
+  const m=document.createElement('div');
+  m.innerHTML=`<div class="fixed inset-0 bg-black/95 z-[260] flex items-end md:items-center justify-center" ${initial?'':'onclick="this.remove()"'}><div onclick="event.stopImmediatePropagation()" class="glass" style="width:100%;max-width:30rem;border-radius:2rem 2rem 0 0;padding:1.5rem;padding-bottom:max(1.5rem,env(safe-area-inset-bottom))">
+    <div style="font-size:1.3rem;font-weight:600;margin-bottom:.3rem">${initial?'Set Up Access':'Change PINs'}</div>
+    <div style="font-size:.78rem;color:var(--stone);margin-bottom:1.25rem">6 digits each. Stored only as a salted hash — never in plain text.</div>
+    <label style="font-size:.65rem;color:rgba(198,166,66,.7);text-transform:uppercase">James's PIN<input id="pin-james" inputmode="numeric" maxlength="6" pattern="\\d*" class="beautiful-input" style="width:100%;padding:.85rem 1rem;border-radius:1rem;margin-top:.25rem;display:block;letter-spacing:.4em;text-align:center" placeholder="••••••"></label>
+    <label style="font-size:.65rem;color:rgba(198,166,66,.7);text-transform:uppercase;display:block;margin-top:.85rem">Jacob's PIN<input id="pin-jacob" inputmode="numeric" maxlength="6" pattern="\\d*" class="beautiful-input" style="width:100%;padding:.85rem 1rem;border-radius:1rem;margin-top:.25rem;display:block;letter-spacing:.4em;text-align:center" placeholder="••••••"></label>
+    <p id="pin-setup-error" style="color:#f87171;font-size:.78rem;height:1.1rem;margin-top:.6rem"></p>
+    <button onclick="savePins(this,${initial?'true':'false'})" style="width:100%;margin-top:.5rem;padding:.9rem;background:var(--red);border-radius:1rem;color:#fff;font-weight:600">Save PINs</button>
+    ${initial?'':'<button onclick="this.closest(\'.fixed\').remove()" style="width:100%;margin-top:.5rem;padding:.6rem;color:var(--stone);font-size:.8rem">Cancel</button>'}
+  </div></div>`;
+  document.getElementById('modal-container').appendChild(m);
+}
+async function savePins(button,initial){
+  const err=document.getElementById('pin-setup-error');
+  const jp=document.getElementById('pin-james').value.trim(), kp=document.getElementById('pin-jacob').value.trim();
+  if(isWeakPin(jp)){ err.textContent='James: '+weakPinReason(jp); return; }
+  if(isWeakPin(kp)){ err.textContent='Jacob: '+weakPinReason(kp); return; }
+  if(jp===kp){ err.textContent='James and Jacob must have different PINs.'; return; }
+  button.disabled=true; button.textContent='Saving…';
+  state.auth={configured:true,james:await makePinRecord(jp),jacob:await makePinRecord(kp)};
+  state.pinFails=0; state.forceJacobPinChange=false;
+  addNotification('review','PIN'+(initial?'s set':'s changed'),'Access PINs were updated by James.','dashboard');
+  saveState(); button.closest('.fixed').remove(); showToast('PINs saved','success');
 }
 
 /* ── Header ── */
@@ -1414,9 +1509,21 @@ function renderSettings(){
       <span class="switch${state.appSettings&&state.appSettings.starSpending!==false?' on':''}"><span class="knob"></span></span>
     </div>
   </section>
+  <section class="card" style="padding:1.25rem;margin-bottom:1.25rem"><div style="font-weight:600;font-size:1.1rem;margin-bottom:.5rem">Security &amp; Access</div>
+    <div style="font-size:.75rem;color:var(--stone);margin-bottom:.85rem">${authConfigured()?'6-digit PINs are set (stored as salted hashes).':'Access is still on bootstrap codes — set real PINs now.'}${state.appLock&&state.appLock.locked?' · <span style="color:var(--red)">App is LOCKED for Jacob</span>':''}</div>
+    <div style="display:flex;flex-direction:column;gap:.5rem">
+      <button onclick="showPinSetup(false)" class="tap" style="display:flex;justify-content:space-between;align-items:center;padding:.85rem 1rem;background:rgba(255,255,255,.05);border-radius:1rem;text-align:left"><span>${authConfigured()?'Change PINs':'Set up PINs'}</span><i class="fa-solid fa-key" style="color:var(--gold)"></i></button>
+      <button onclick="forceJacobPin()" class="tap" style="display:flex;justify-content:space-between;align-items:center;padding:.85rem 1rem;background:rgba(255,255,255,.05);border-radius:1rem;text-align:left"><span>Force Jacob to change PIN</span><i class="fa-solid fa-rotate" style="color:var(--stone)"></i></button>
+      ${state.appLock&&state.appLock.locked?`<button onclick="releaseLock()" class="tap" style="display:flex;justify-content:space-between;align-items:center;padding:.85rem 1rem;background:rgba(143,175,151,.18);border-radius:1rem;text-align:left;color:var(--sage)"><span>Release lock</span><i class="fa-solid fa-lock-open"></i></button>`:''}
+      <button onclick="resetAccessBootstrap()" class="tap" style="display:flex;justify-content:space-between;align-items:center;padding:.85rem 1rem;background:rgba(143,17,24,.15);border-radius:1rem;text-align:left;color:var(--rose)"><span>Reset access (recovery)</span><i class="fa-solid fa-life-ring"></i></button>
+    </div>
+  </section>
   <section class="card" style="padding:1.25rem;margin-bottom:1.25rem"><div style="font-weight:600;font-size:1.1rem;margin-bottom:.85rem">Data Management</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem"><button onclick="exportSystemBackup()" class="subtle-card tap" style="padding:1rem;text-align:left;display:block;cursor:pointer"><i class="fa-solid fa-download" style="color:var(--gold)"></i><div style="font-weight:600;margin-top:.5rem;font-size:.9rem">Export Backup</div><div style="font-size:.75rem;color:var(--stone)">JSON download</div></button><label class="subtle-card tap" style="padding:1rem;text-align:left;display:block;cursor:pointer"><i class="fa-solid fa-upload" style="color:var(--blue)"></i><div style="font-weight:600;margin-top:.5rem;font-size:.9rem">Restore Backup</div><div style="font-size:.75rem;color:var(--stone)">Import JSON</div><input type="file" accept="application/json" style="display:none" onchange="restoreSystemBackup(this)"></label></div></section><section class="card" style="padding:1.25rem;margin-bottom:1.25rem"><div style="font-weight:600;font-size:1.1rem;margin-bottom:.85rem">Reset From Scratch</div><div style="display:flex;flex-direction:column;gap:.5rem">${[['demo','Reset demo data'],['profile','Reset profile'],['protocols','Reset protocols'],['tasks','Reset tasks'],['rewards','Reset rewards'],['notifications','Reset notifications'],['local','Clear local device cache']].map(([key,label])=>`<button onclick="resetSection('${key}')" class="tap" style="display:flex;justify-content:space-between;align-items:center;padding:.85rem 1rem;background:rgba(255,255,255,.05);border-radius:1rem;text-align:left"><span>${label}</span><i class="fa-solid fa-rotate-left" style="color:var(--stone)"></i></button>`).join('')}</div></section><section class="card" style="padding:1.25rem;border:1px solid rgba(143,17,24,.4)"><div style="font-weight:600;font-size:1.1rem;color:var(--red);margin-bottom:.5rem">Danger Zone</div><div style="font-size:.85rem;color:var(--stone);margin-bottom:1rem">This backs up the current system locally, then resets all shared app data. Requires typed confirmation.</div><button onclick="resetEverything()" style="width:100%;padding:.85rem;background:var(--red);border-radius:1rem;color:#fff">Reset Everything</button></section>`;
 }
 function toggleStarSpending(){ state.appSettings=state.appSettings||{}; state.appSettings.starSpending=!(state.appSettings.starSpending!==false); saveState(); renderSettings(); }
+function forceJacobPin(){ if(state.currentRole!=='dom')return; state.forceJacobPinChange=true; addNotification('task','James requires you to change your PIN','Set a new 6-digit PIN.','dashboard'); saveState(); showToast('Jacob will be asked to change his PIN','success'); }
+function releaseLock(){ if(state.currentRole!=='dom')return; state.appLock={locked:false}; state.pinFails=0; saveState(); renderSettings(); showToast('Lock released','success'); }
+function resetAccessBootstrap(){ if(state.currentRole!=='dom')return; if(!confirm('Reset access to the bootstrap codes? You will set fresh PINs at next login. Use this only if you are locked out.'))return; state.auth={configured:false}; state.appLock={locked:false}; state.pinFails=0; saveState(); showToast('Access reset — set new PINs at next login','success'); }
 function exportSystemBackup(){ const blob=new Blob([safeJson(state)],{type:'application/json'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='the-system-backup-'+new Date().toISOString().slice(0,10)+'.json'; a.click(); URL.revokeObjectURL(url); }
 function restoreSystemBackup(input){ const file=input.files&&input.files[0]; if(!file)return; const reader=new FileReader(); reader.onload=()=>{ try{ const next=JSON.parse(reader.result); state={...defaultSystemState(state.currentRole),...next,currentRole:state.currentRole}; migrateEnhancedState(); saveState(); showToast('Backup Restored','success'); navigateToTab('dashboard'); }catch(err){ alert('Backup file is not valid JSON.'); } }; reader.readAsText(file); }
 function backupBeforeReset(){ localStorage.setItem('the_system_backup_before_reset_'+Date.now(),JSON.stringify(state)); }
