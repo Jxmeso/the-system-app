@@ -6,7 +6,7 @@
 
 /* ── Version gate: forces one clean navigation when new build detected ── */
 (function(){
-  var BUILD='v5-20260628-03';
+  var BUILD='v5-20260628-04';
   try{
     if(localStorage.getItem('_sys_build')!==BUILD){
       try{localStorage.setItem('_sys_build',BUILD);}catch(_){}
@@ -48,8 +48,11 @@ const NAV_ITEMS = [
 ];
 const DEFAULT_PHOTO = 'https://i.pravatar.cc/320?img=12';
 
-/* ── State: use window.state so our functions share one binding ── */
-var state = null;
+/* ── State: do NOT redeclare `state` — index.html's inline script already
+   declares `let state`. Both classic scripts share the same global lexical
+   environment, so we reference and assign that SAME binding here. Declaring
+   it again (var/let) throws "Identifier 'state' has already been declared"
+   and kills this entire file. ── */
 var countdownTimer = null;
 var activeProtocolPanel = 'rules';
 var activeNotificationsFilter = 'all';
