@@ -6,7 +6,7 @@
 
 /* ── Version gate: forces one clean navigation when new build detected ── */
 (function(){
-  var BUILD='v5-20260628-12';
+  var BUILD='v5-20260628-14';
   try{
     if(localStorage.getItem('_sys_build')!==BUILD){
       try{localStorage.setItem('_sys_build',BUILD);}catch(_){}
@@ -118,6 +118,7 @@ function defaultSystemState(role){
     },
     notifications:[],readNotifIds:[],disclosures:[],checkIns:[],badges:[],customBadges:[],dataVersion:6,
     hideHardLimits:false,auth:{configured:false},pinFails:0,appLock:{locked:false},forceJacobPinChange:false,
+    voice:{enabled:false,samples:[]},
     subProfile:defaultSubProfile(),bodyMaps:defaultBodyMaps(),personalRecords:defaultPersonalRecords(),
     appSettings:{reduceMotion:false,starSpending:true}
   };
@@ -223,6 +224,8 @@ function normalizeState(){
   if(!state.auth) state.auth={configured:false};
   if(typeof state.pinFails!=='number') state.pinFails=0;
   if(!state.appLock) state.appLock={locked:false};
+  if(!state.voice) state.voice={enabled:false,samples:[]};
+  state.voice.samples=ensureArray(state.voice.samples);
   if(typeof state.hideHardLimits!=='boolean'){ state.hideHardLimits=false; }
   state.appSettings={reduceMotion:false,starSpending:true,...(state.appSettings||{})};
   if(typeof state.appSettings.starSpending!=='boolean'){ state.appSettings.starSpending=true; changed=true; }
@@ -294,7 +297,7 @@ function systemLogoSVG(size){
 }
 function buildKeypad(){
   const screen=document.getElementById('login-screen'); if(!screen)return;
-  document.getElementById('bottom-navigation').style.display='none';
+  const _nav=document.getElementById('bottom-navigation'); if(_nav)_nav.style.display='none';
   screen.style.cssText='position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:#070707';
   screen.innerHTML=`<div style="max-width:22rem;width:100%;padding:0 1.75rem;text-align:center">
     <div style="display:flex;justify-content:center;margin-bottom:1rem">${systemLogoSVG(120)}</div>
@@ -379,7 +382,16 @@ async function attemptLogin(){
     if(role!=='dom'){ _loginError("Awaiting James"+String.fromCharCode(8217)+'s judgement.'); return; }
     state.appLock={locked:false}; addNotification('review','Lock released by James','Access restored.','dashboard');
   }
-  state.pinFails=0; state.currentRole=role; saveState();
+  state.pinFails=0;
+  /* Phase 5: surprise voice check for Jacob when James has enabled it */
+  if(role==='sub'&&state.voice&&state.voice.enabled&&ensureArray(state.voice.samples).length>=5){
+    startVoiceVerify(()=>completeLogin('sub'));
+    return;
+  }
+  completeLogin(role);
+}
+function completeLogin(role){
+  state.currentRole=role; saveState();
   document.getElementById('login-screen').style.display='none';
   document.getElementById('main-app').style.display='';
   document.getElementById('main-app').classList.remove('hidden');
@@ -387,9 +399,9 @@ async function attemptLogin(){
   updateRoleUI();
   navigateToTab(new URLSearchParams(location.search).get('tab')||'dashboard');
   try{ enablePushNotifications(); }catch(_){}
-  /* First run: James must set real 6-digit PINs */
   if(!authConfigured()&&role==='dom') setTimeout(()=>showPinSetup(true),400);
   else if(role==='dom'&&state.forceJacobPinChange) setTimeout(()=>showToast('Reminder: Jacob still needs to change his PIN','info'),600);
+  else if(role==='sub'&&state.voice&&state.voice.enabled&&ensureArray(state.voice.samples).length<5) setTimeout(()=>showVoiceSetup(),500);
 }
 function forgotPin(){
   state.appLock={locked:true,reason:'PIN reset requested. Awaiting James'+String.fromCharCode(8217)+'s judgement.',at:new Date().toISOString()};
@@ -561,6 +573,96 @@ function triggerScreenshotLock(){
   addNotification('review','Screenshot attempt detected','Jacob attempted a screenshot or recording.','dashboard');
   state.appLock={locked:true,reason:'Attempt to screenshot. Awaiting judgement.',at:new Date().toISOString(),scope:'screenshot'};
   saveState(); enforceLock();
+}
+
+/* ════════════ PHASE 5: VOICE MATCHING (ritual verification) ════════════
+   Approximate, by design — compares the average spectral signature of a live
+   phrase to Jacob's enrolled samples (cosine similarity). Not a trained speaker
+   model; real security still rests on PIN + lockout + James's release. */
+const VOICE_PHRASE='Yes Sir, it is me.';
+const VOICE_REC_SECONDS=3;
+function voiceCentroid(){ const s=ensureArray(state.voice&&state.voice.samples); if(!s.length)return null; const n=s[0].length; const c=new Array(n).fill(0); s.forEach(v=>v.forEach((x,i)=>c[i]+=x)); return c.map(x=>x/s.length); }
+function _cosine(a,b){ if(!a||!b)return 0; let d=0,na=0,nb=0; for(let i=0;i<a.length;i++){ d+=a[i]*b[i]; na+=a[i]*a[i]; nb+=b[i]*b[i]; } return d/((Math.sqrt(na)*Math.sqrt(nb))||1); }
+async function recordVoiceVector(seconds){
+  let stream;
+  try{ stream=await navigator.mediaDevices.getUserMedia({audio:true}); }catch(e){ throw new Error('mic'); }
+  const AC=window.AudioContext||window.webkitAudioContext; const ac=new AC();
+  const src=ac.createMediaStreamSource(stream); const an=ac.createAnalyser(); an.fftSize=64; src.connect(an);
+  const bins=an.frequencyBinCount; const acc=new Float64Array(bins); let frames=0;
+  return await new Promise(resolve=>{
+    const iv=setInterval(()=>{ const d=new Uint8Array(bins); an.getByteFrequencyData(d); for(let i=0;i<bins;i++)acc[i]+=d[i]; frames++; },80);
+    setTimeout(()=>{ clearInterval(iv); stream.getTracks().forEach(t=>t.stop()); try{src.disconnect();ac.close();}catch(_){}
+      const v=[...acc].map(x=>x/(frames||1)); const norm=Math.sqrt(v.reduce((s,x)=>s+x*x,0))||1; resolve(v.map(x=>x/norm));
+    }, seconds*1000);
+  });
+}
+/* ── Enrolment: Jacob records samples ── */
+function showVoiceSetup(){
+  state.voice=state.voice||{enabled:true,samples:[]}; state.voice.samples=ensureArray(state.voice.samples);
+  const m=document.createElement('div'); m.id='voice-setup';
+  m.innerHTML=`<div class="fixed inset-0 bg-black/95 z-[260] flex items-end md:items-center justify-center" onclick="this.remove()"><div onclick="event.stopImmediatePropagation()" class="glass" style="width:100%;max-width:30rem;border-radius:2rem 2rem 0 0;padding:1.5rem;padding-bottom:max(1.5rem,env(safe-area-inset-bottom));text-align:center">
+    <div style="font-size:1.3rem;font-weight:600">Voice Enrolment</div>
+    <div style="font-size:.8rem;color:var(--stone);margin:.5rem 0 1.25rem">Record this phrase ${10} times so James can verify you.<br><span style="color:var(--gold);font-style:italic">“${VOICE_PHRASE}”</span></div>
+    <div class="voice-wave" id="vs-wave" style="opacity:.3">${[...Array(7)].map((_,i)=>`<span style="animation-delay:${i*0.1}s"></span>`).join('')}</div>
+    <div id="vs-count" style="font-size:2rem;font-weight:700;color:var(--gold);margin:.75rem 0">${state.voice.samples.length}/10</div>
+    <button id="vs-btn" onclick="recordVoiceSample(this)" class="tap" style="width:100%;padding:.9rem;background:var(--red);border-radius:1rem;color:#fff;font-weight:600"><i class="fa-solid fa-microphone" style="margin-right:.4rem"></i>Record sample</button>
+    <button onclick="this.closest('.fixed').remove()" style="width:100%;margin-top:.5rem;padding:.6rem;color:var(--stone);font-size:.8rem">Later</button>
+  </div></div>`;
+  document.getElementById('modal-container').appendChild(m);
+}
+async function recordVoiceSample(btn){
+  btn.disabled=true; const wave=document.getElementById('vs-wave'); if(wave)wave.style.opacity='1';
+  btn.innerHTML='<i class="fa-solid fa-circle" style="margin-right:.4rem;color:#fff;animation:pulseZone 1s infinite"></i>Listening…';
+  try{
+    const v=await recordVoiceVector(VOICE_REC_SECONDS);
+    state.voice.samples=ensureArray(state.voice.samples); state.voice.samples.push(v);
+    if(state.voice.samples.length>10) state.voice.samples=state.voice.samples.slice(-10);
+    saveState();
+    const c=document.getElementById('vs-count'); if(c)c.textContent=state.voice.samples.length+'/10';
+    if(wave)wave.style.opacity='.3';
+    if(state.voice.samples.length>=10){ btn.closest('.fixed').remove(); showToast('Voice enrolled','success'); }
+    else { btn.disabled=false; btn.innerHTML='<i class="fa-solid fa-microphone" style="margin-right:.4rem"></i>Record sample'; }
+  }catch(e){ btn.disabled=false; btn.innerHTML='<i class="fa-solid fa-microphone" style="margin-right:.4rem"></i>Record sample'; if(wave)wave.style.opacity='.3'; showToast('Microphone needed','error'); }
+}
+/* ── Verification ── */
+function startVoiceVerify(onPass){
+  const m=document.createElement('div'); m.id='voice-verify';
+  m.innerHTML=`<div class="fixed inset-0 z-[280]" style="background:#070707;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:2rem">
+    <div style="font-size:.7rem;letter-spacing:3px;color:var(--gold)">VOICE VERIFICATION</div>
+    <div style="font-size:.9rem;color:var(--stone);margin:.6rem 0 1.5rem">Say the phrase clearly:<br><span style="color:var(--ivory);font-style:italic">“${VOICE_PHRASE}”</span></div>
+    <div class="voice-wave big" id="vv-wave" style="opacity:.35">${[...Array(9)].map((_,i)=>`<span style="animation-delay:${i*0.09}s"></span>`).join('')}</div>
+    <div id="vv-status" style="font-size:.85rem;color:var(--stone);margin-top:1.5rem;height:1.2rem"></div>
+    <button id="vv-btn" onclick="runVoiceVerify(this)" class="tap" style="margin-top:1.5rem;padding:.9rem 2rem;background:var(--red);border-radius:1rem;color:#fff;font-weight:600"><i class="fa-solid fa-microphone" style="margin-right:.4rem"></i>Start</button>
+  </div>`;
+  document.getElementById('modal-container').appendChild(m);
+  window._voicePass=onPass;
+}
+async function runVoiceVerify(btn){
+  btn.disabled=true; const wave=document.getElementById('vv-wave'), status=document.getElementById('vv-status');
+  if(wave)wave.style.opacity='1'; btn.style.display='none'; status.textContent='Listening…';
+  let live;
+  try{ live=await recordVoiceVector(VOICE_REC_SECONDS); }
+  catch(e){ status.textContent='Microphone permission needed.'; btn.style.display=''; btn.disabled=false; if(wave)wave.style.opacity='.35'; return; }
+  status.textContent='Matching voice…';
+  /* deliberate ~5s tense animation */
+  await new Promise(r=>setTimeout(r,5000));
+  const sim=_cosine(live,voiceCentroid());
+  const band=sim>=0.93?'green':sim>=0.82?'amber':'red';
+  state.voice.lastResult={band,score:Math.round(sim*100),at:new Date().toISOString()};
+  if(band==='red'){
+    addNotification('review','Voice verification failed','Jacob failed voice match ('+Math.round(sim*100)+'%).','dashboard');
+    state.appLock={locked:true,reason:'Voice verification failed. Awaiting James'+String.fromCharCode(8217)+'s judgement.',at:new Date().toISOString(),scope:'voice'};
+    saveState();
+    if(wave){ wave.style.setProperty('--vc','var(--red)'); }
+    status.innerHTML='<span style="color:var(--red);font-weight:600">Verification failed.</span>';
+    setTimeout(()=>{ document.getElementById('voice-verify')?.remove(); buildKeypad(); const ls=document.getElementById('login-screen'); if(ls)ls.style.display='flex'; _loginError("Voice failed. Awaiting James"+String.fromCharCode(8217)+'s judgement.'); },1400);
+    return;
+  }
+  addNotification('review','Voice match '+(band==='amber'?'accepted (amber)':'accepted'),'Jacob verified at '+Math.round(sim*100)+'%.','dashboard');
+  if(wave) wave.style.setProperty('--vc',band==='amber'?'var(--gold)':'var(--sage)');
+  status.innerHTML=`<span style="color:${band==='amber'?'var(--gold)':'var(--sage)'};font-weight:600">${band==='amber'?'Imperfect but accepted.':'Voice match accepted.'}</span>`;
+  saveState();
+  setTimeout(()=>{ document.getElementById('voice-verify')?.remove(); const cb=window._voicePass; window._voicePass=null; if(cb)cb(); },1300);
 }
 
 /* ── Dashboard — FULL REBUILD ── */
@@ -1580,10 +1682,16 @@ function renderSettings(){
       ${state.appLock&&state.appLock.locked?`<button onclick="releaseLock()" class="tap" style="display:flex;justify-content:space-between;align-items:center;padding:.85rem 1rem;background:rgba(143,175,151,.18);border-radius:1rem;text-align:left;color:var(--sage)"><span>Release lock</span><i class="fa-solid fa-lock-open"></i></button>`:''}
       <button onclick="resetAccessBootstrap()" class="tap" style="display:flex;justify-content:space-between;align-items:center;padding:.85rem 1rem;background:rgba(143,17,24,.15);border-radius:1rem;text-align:left;color:var(--rose)"><span>Reset access (recovery)</span><i class="fa-solid fa-life-ring"></i></button>
     </div>
+    <div class="tap" onclick="toggleVoiceVerify()" style="display:flex;justify-content:space-between;align-items:center;padding:.85rem 1rem;background:rgba(255,255,255,.05);border-radius:1rem;cursor:pointer;margin-top:.5rem">
+      <div><div style="font-weight:600;font-size:.9rem">Voice verification</div><div style="font-size:.72rem;color:var(--stone)">Surprise voice check after Jacob's PIN${state.voice&&state.voice.enabled?` · ${ensureArray(state.voice.samples).length}/10 enrolled`:''}${state.voice&&state.voice.lastResult?` · last ${state.voice.lastResult.band} ${state.voice.lastResult.score}%`:''}</div></div>
+      <span class="switch${state.voice&&state.voice.enabled?' on':''}"><span class="knob"></span></span>
+    </div>
+    ${state.voice&&state.voice.enabled?`<button onclick="showVoiceSetup()" class="tap" style="width:100%;margin-top:.5rem;padding:.7rem;background:rgba(49,91,122,.25);border-radius:1rem;color:var(--blue);font-size:.82rem"><i class="fa-solid fa-microphone" style="margin-right:.3rem"></i>${ensureArray(state.voice.samples).length>=10?'Re-enrol Jacob'+String.fromCharCode(39)+'s voice':'Enrol Jacob'+String.fromCharCode(39)+'s voice ('+ensureArray(state.voice.samples).length+'/10)'}</button>`:''}
   </section>
   <section class="card" style="padding:1.25rem;margin-bottom:1.25rem"><div style="font-weight:600;font-size:1.1rem;margin-bottom:.85rem">Data Management</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem"><button onclick="exportSystemBackup()" class="subtle-card tap" style="padding:1rem;text-align:left;display:block;cursor:pointer"><i class="fa-solid fa-download" style="color:var(--gold)"></i><div style="font-weight:600;margin-top:.5rem;font-size:.9rem">Export Backup</div><div style="font-size:.75rem;color:var(--stone)">JSON download</div></button><label class="subtle-card tap" style="padding:1rem;text-align:left;display:block;cursor:pointer"><i class="fa-solid fa-upload" style="color:var(--blue)"></i><div style="font-weight:600;margin-top:.5rem;font-size:.9rem">Restore Backup</div><div style="font-size:.75rem;color:var(--stone)">Import JSON</div><input type="file" accept="application/json" style="display:none" onchange="restoreSystemBackup(this)"></label></div></section><section class="card" style="padding:1.25rem;margin-bottom:1.25rem"><div style="font-weight:600;font-size:1.1rem;margin-bottom:.85rem">Reset From Scratch</div><div style="display:flex;flex-direction:column;gap:.5rem">${[['demo','Reset demo data'],['profile','Reset profile'],['protocols','Reset protocols'],['tasks','Reset tasks'],['rewards','Reset rewards'],['notifications','Reset notifications'],['local','Clear local device cache']].map(([key,label])=>`<button onclick="resetSection('${key}')" class="tap" style="display:flex;justify-content:space-between;align-items:center;padding:.85rem 1rem;background:rgba(255,255,255,.05);border-radius:1rem;text-align:left"><span>${label}</span><i class="fa-solid fa-rotate-left" style="color:var(--stone)"></i></button>`).join('')}</div></section><section class="card" style="padding:1.25rem;border:1px solid rgba(143,17,24,.4)"><div style="font-weight:600;font-size:1.1rem;color:var(--red);margin-bottom:.5rem">Danger Zone</div><div style="font-size:.85rem;color:var(--stone);margin-bottom:1rem">This backs up the current system locally, then resets all shared app data. Requires typed confirmation.</div><button onclick="resetEverything()" style="width:100%;padding:.85rem;background:var(--red);border-radius:1rem;color:#fff">Reset Everything</button></section>`;
 }
 function toggleStarSpending(){ state.appSettings=state.appSettings||{}; state.appSettings.starSpending=!(state.appSettings.starSpending!==false); saveState(); renderSettings(); }
+function toggleVoiceVerify(){ if(state.currentRole!=='dom')return; state.voice=state.voice||{enabled:false,samples:[]}; state.voice.enabled=!state.voice.enabled; saveState(); renderSettings(); if(state.voice.enabled&&ensureArray(state.voice.samples).length<10) setTimeout(()=>showVoiceSetup(),250); }
 function forceJacobPin(){ if(state.currentRole!=='dom')return; state.forceJacobPinChange=true; addNotification('task','James requires you to change your PIN','Set a new 6-digit PIN.','dashboard'); saveState(); showToast('Jacob will be asked to change his PIN','success'); }
 function releaseLock(){ if(state.currentRole!=='dom')return; state.appLock={locked:false}; state.pinFails=0; ensureArray(state.tasks).forEach(t=>{ t.overdueHandled=false; }); saveState(); renderSettings(); enforceLock(); showToast('Lock released','success'); }
 function resetAccessBootstrap(){ if(state.currentRole!=='dom')return; if(!confirm('Reset access to the bootstrap codes? You will set fresh PINs at next login. Use this only if you are locked out.'))return; state.auth={configured:false}; state.appLock={locked:false}; state.pinFails=0; saveState(); showToast('Access reset — set new PINs at next login','success'); }
