@@ -6,7 +6,7 @@
 
 /* ── Version gate: forces one clean navigation when new build detected ── */
 (function(){
-  var BUILD='v5-20260628-11';
+  var BUILD='v5-20260628-12';
   try{
     if(localStorage.getItem('_sys_build')!==BUILD){
       try{localStorage.setItem('_sys_build',BUILD);}catch(_){}
@@ -448,6 +448,7 @@ function updateRoleUI(){
   document.querySelectorAll('.dom-only').forEach(el=>el.style.display=isDom?'':'none');
   document.querySelectorAll('.sub-only').forEach(el=>el.style.display=isDom?'none':'');
   updateHeader();
+  enforceLock(); renderTimerStrip();
 }
 
 /* ── Navigation ── */
@@ -477,7 +478,7 @@ function renderCurrentTab(){
   else if(tab==='stars') renderRewards();
   else if(tab==='notifications') renderNotifications();
   else if(tab==='settings') renderSettings();
-  updateHeader();
+  updateHeader(); renderTimerStrip();
 }
 
 /* ── Time helpers ── */
@@ -499,6 +500,68 @@ function activePunishments(){
   return ensureArray(state.punishments).filter(p=>p.status==='active');
 }
 function updateCountdowns(){ document.querySelectorAll('[data-countdown]').forEach(el=>{ const p=state.punishments.find(x=>String(x.id)===String(el.dataset.countdown)); if(p) el.textContent=getTimeLeft(p).text; }); }
+
+/* ════════════ PHASE 3: TIMERS, WARNINGS & LOCKDOWN ════════════ */
+function timedItems(){
+  const out=[];
+  ensureArray(state.tasks).filter(t=>t.status==='pending'&&dueDateFor(t)).forEach(t=>out.push({refId:t.id,kind:'task',title:titleCase(t.title),item:t}));
+  ensureArray(state.punishments).filter(p=>p.status==='active'&&p.kind==='timed'&&dueDateFor(p)).forEach(p=>out.push({refId:p.id,kind:'punishment',title:titleCase(p.title),item:p}));
+  return out.sort((a,b)=>dueDateFor(a.item)-dueDateFor(b.item));
+}
+function renderTimerStrip(){
+  const main=document.getElementById('main-app');
+  let strip=document.getElementById('timer-strip');
+  const visible=main&&main.style.display!=='none'&&!(state.appLock&&state.appLock.locked&&state.currentRole==='sub');
+  const items=visible?timedItems():[];
+  if(!items.length){ if(strip)strip.style.display='none'; return; }
+  if(!strip){ strip=document.createElement('div'); strip.id='timer-strip'; strip.className='seg-scroll'; document.body.appendChild(strip); }
+  const header=document.querySelector('.app-header'); const top=header?Math.round(header.getBoundingClientRect().bottom):56;
+  strip.style.cssText=`position:fixed;left:0;right:0;top:${top}px;z-index:45;display:flex;gap:.5rem;overflow-x:auto;padding:.4rem .9rem;background:rgba(7,7,7,.94);backdrop-filter:blur(14px);border-bottom:1px solid rgba(255,255,255,.08)`;
+  strip.innerHTML=items.map(it=>{ const tl=getTimeLeft(it.item); const over=tl.text==='Overdue'; const col=over?'var(--red)':it.kind==='punishment'?'var(--red)':'var(--blue)';
+    return `<button onclick="openTimedItem('${it.kind}',${it.refId})" class="tap" style="flex-shrink:0;display:flex;align-items:center;gap:.45rem;padding:.25rem .55rem;border-radius:999px;background:${over?'rgba(143,17,24,.25)':'rgba(255,255,255,.05)'};border:1px solid ${over?'var(--red)':'rgba(255,255,255,.1)'}">
+      <span class="mini-ring" style="--p:${tl.pct};--c:${col}"><i class="fa-solid ${it.kind==='punishment'?'fa-hourglass-half':'fa-clock'}"></i></span>
+      <span style="font-size:.62rem;color:var(--stone);max-width:4.5rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeText(it.title)}</span>
+      <span class="countdown" style="font-size:.66rem;font-variant-numeric:tabular-nums;color:${over?'#fca5a5':'var(--ivory)'}">${tl.text}</span>
+    </button>`; }).join('');
+}
+function openTimedItem(kind,id){ if(kind==='task'){ const t=state.tasks.find(x=>String(x.id)===String(id)); if(t)showTaskDetail(t); } else { activeProtocolPanel='consequences'; navigateToTab('protocols'); } }
+const WARN_THRESHOLDS=[60,45,30,15,10,5,1];
+function tickTimers(){
+  if(!state) return; const now=Date.now(); let changed=false;
+  ensureArray(state.tasks).filter(t=>t.status==='pending'&&dueDateFor(t)).forEach(t=>{
+    t.warned=ensureArray(t.warned);
+    const mins=(dueDateFor(t)-now)/60000;
+    WARN_THRESHOLDS.forEach(th=>{ if(mins<=th&&mins>th-1&&!t.warned.includes(th)){ t.warned.push(th); addNotification('task','Task due in '+th+' min',titleCase(t.title),'tasks'); changed=true; } });
+    if(mins<=0&&!t.overdueHandled){ t.overdueHandled=true; changed=true; handleOverdue(t); }
+  });
+  if(changed) saveState();
+  renderTimerStrip(); updateCountdowns(); enforceLock();
+}
+function handleOverdue(item){
+  addNotification('review','Jacob is overdue','“'+titleCase(item.title)+'” passed its deadline.','tasks');
+  state.appLock={locked:true,reason:'Awaiting judgement as a result of failure.',at:new Date().toISOString(),scope:'overdue'};
+}
+/* In-session lock overlay — Jacob can be logged in but cannot use the app */
+function enforceLock(){
+  const main=document.getElementById('main-app');
+  let ov=document.getElementById('lock-overlay');
+  const locked=state&&state.appLock&&state.appLock.locked&&state.currentRole==='sub'&&main&&main.style.display!=='none';
+  if(!locked){ if(ov)ov.remove(); return; }
+  if(!ov){ ov=document.createElement('div'); ov.id='lock-overlay'; document.body.appendChild(ov); }
+  ov.style.cssText='position:fixed;inset:0;z-index:300;background:#070707;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:2rem';
+  ov.innerHTML=`<div style="margin-bottom:1.5rem">${systemLogoSVG(120)}</div><div style="font-size:.7rem;letter-spacing:3px;color:var(--red)">LOCKED</div><div class="heading-serif" style="font-size:1.9rem;margin-top:.6rem;max-width:18rem;line-height:1.1">${escapeText(state.appLock.reason||"Awaiting James"+String.fromCharCode(8217)+"s judgement")}</div><div style="font-size:.8rem;color:var(--stone);margin-top:1.1rem">Only James can release the app.</div>`;
+}
+/* Screenshot / screen-record guard — best effort only (iOS web cannot fully block) */
+function initScreenshotGuard(){
+  document.addEventListener('keyup',e=>{ if(e.key==='PrintScreen') triggerScreenshotLock(); });
+  document.addEventListener('keydown',e=>{ if((e.metaKey||e.ctrlKey)&&e.shiftKey&&['3','4','5','s','S'].includes(e.key)) triggerScreenshotLock(); });
+}
+function triggerScreenshotLock(){
+  if(!state||state.currentRole!=='sub')return;
+  addNotification('review','Screenshot attempt detected','Jacob attempted a screenshot or recording.','dashboard');
+  state.appLock={locked:true,reason:'Attempt to screenshot. Awaiting judgement.',at:new Date().toISOString(),scope:'screenshot'};
+  saveState(); enforceLock();
+}
 
 /* ── Dashboard — FULL REBUILD ── */
 function renderDashboard(){
@@ -1522,7 +1585,7 @@ function renderSettings(){
 }
 function toggleStarSpending(){ state.appSettings=state.appSettings||{}; state.appSettings.starSpending=!(state.appSettings.starSpending!==false); saveState(); renderSettings(); }
 function forceJacobPin(){ if(state.currentRole!=='dom')return; state.forceJacobPinChange=true; addNotification('task','James requires you to change your PIN','Set a new 6-digit PIN.','dashboard'); saveState(); showToast('Jacob will be asked to change his PIN','success'); }
-function releaseLock(){ if(state.currentRole!=='dom')return; state.appLock={locked:false}; state.pinFails=0; saveState(); renderSettings(); showToast('Lock released','success'); }
+function releaseLock(){ if(state.currentRole!=='dom')return; state.appLock={locked:false}; state.pinFails=0; ensureArray(state.tasks).forEach(t=>{ t.overdueHandled=false; }); saveState(); renderSettings(); enforceLock(); showToast('Lock released','success'); }
 function resetAccessBootstrap(){ if(state.currentRole!=='dom')return; if(!confirm('Reset access to the bootstrap codes? You will set fresh PINs at next login. Use this only if you are locked out.'))return; state.auth={configured:false}; state.appLock={locked:false}; state.pinFails=0; saveState(); showToast('Access reset — set new PINs at next login','success'); }
 function exportSystemBackup(){ const blob=new Blob([safeJson(state)],{type:'application/json'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='the-system-backup-'+new Date().toISOString().slice(0,10)+'.json'; a.click(); URL.revokeObjectURL(url); }
 function restoreSystemBackup(input){ const file=input.files&&input.files[0]; if(!file)return; const reader=new FileReader(); reader.onload=()=>{ try{ const next=JSON.parse(reader.result); state={...defaultSystemState(state.currentRole),...next,currentRole:state.currentRole}; migrateEnhancedState(); saveState(); showToast('Backup Restored','success'); navigateToTab('dashboard'); }catch(err){ alert('Backup file is not valid JSON.'); } }; reader.readAsText(file); }
@@ -1558,9 +1621,10 @@ function enhancedInitialize(){
   updateRoleUI();
   /* Kick Firebase (original connectFirestore is in index.html inline script) */
   try{ connectFirestore(); }catch(e){ console.warn('Firebase skipped',e); }
-  /* Countdown ticker */
+  /* Countdown + warning/overdue ticker */
   clearInterval(countdownTimer);
-  countdownTimer=setInterval(function(){ if(!state)return; activePunishments(); updateCountdowns(); },1000);
+  countdownTimer=setInterval(function(){ if(!state)return; activePunishments(); tickTimers(); },1000);
+  try{ initScreenshotGuard(); }catch(_){}
   /* Start on dashboard */
   navigateToTab('dashboard');
 }
