@@ -6,7 +6,7 @@
 
 /* ── Version gate: forces one clean navigation when new build detected ── */
 (function(){
-  var BUILD='v5-20260628-04';
+  var BUILD='v5-20260628-05';
   try{
     if(localStorage.getItem('_sys_build')!==BUILD){
       try{localStorage.setItem('_sys_build',BUILD);}catch(_){}
@@ -158,7 +158,11 @@ function installNavigation(){
   nav.innerHTML=`<div class="max-w-3xl mx-auto grid grid-cols-5 text-center text-xs" style="padding-bottom:max(1.1rem,env(safe-area-inset-bottom));padding-top:.5rem">${NAV_ITEMS.map(([tab,label,icon])=>`<button onclick="navigateToTab('${tab}')" class="nav-item tap py-1 flex flex-col items-center gap-0 cursor-pointer" data-tab="${tab}"><span class="nav-icon"><i class="fa-solid ${icon} text-lg"></i></span><span class="text-[10px] tracking-wide">${label}</span></button>`).join('')}</div>`;
 }
 function installScreens(){
-  const host=document.querySelector('#main-app .max-w-3xl')||document.getElementById('main-app');
+  /* Append next to the EXISTING tabs so we inherit the content wrapper's
+     px-5 padding + max-width. #main-app has two .max-w-3xl divs (header +
+     content); using an existing tab's parent guarantees the content one. */
+  const anchor=document.getElementById('tab-dashboard');
+  const host=(anchor&&anchor.parentElement)||document.querySelector('#main-app .max-w-3xl.px-5')||document.getElementById('main-app');
   if(!host)return;
   ['protocols','notifications','settings'].forEach(id=>{
     if(!document.getElementById('tab-'+id)){
