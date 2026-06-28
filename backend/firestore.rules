@@ -1,0 +1,27 @@
+rules_version = '2';
+// DO NOT PUBLISH until Firebase Auth is enabled (see DEPLOY.md Step 1).
+// Without request.auth these rules would block the app's sync.
+service cloud.firestore {
+  match /databases/{db}/documents {
+    function isJames() { return request.auth != null && request.auth.uid == 'JAMES_UID'; }
+    function signedIn() { return request.auth != null; }
+    match /systems/shared {
+      allow read: if signedIn();
+      allow write: if isJames();
+      match /meta/{doc} { allow read: if signedIn(); allow write: if isJames(); }
+      match /journal/{entryId} {
+        allow read: if signedIn();
+        allow create: if signedIn();
+        allow update, delete: if isJames();
+      }
+      match /tasks/{taskId} {
+        allow read: if signedIn();
+        allow update: if isJames()
+          || (signedIn()
+              && request.resource.data.diff(resource.data).changedKeys()
+                   .hasOnly(['status','evidence','report','completedAt','completedDate']));
+        allow create, delete: if isJames();
+      }
+    }
+  }
+}
