@@ -118,6 +118,14 @@ button{touch-action:manipulation}
 .seg-btn i{font-size:.8rem}
 .seg-btn.seg-on{background:var(--red-2);border-color:var(--red);color:#fff;box-shadow:0 6px 18px rgba(143,17,24,.3)}
 
+/* ===== LIVE CAPTURE (auto video/voice) ===== */
+.cap-big{font-size:5rem!important;animation:capPop .85s ease}
+@keyframes capPop{0%{transform:scale(.4);opacity:0}40%{transform:scale(1.1);opacity:1}100%{transform:scale(1)}}
+#cap-flash.cap-flash-on{box-shadow:inset 0 0 70px 26px rgba(207,51,60,.85);animation:capFlash .55s ease-in-out infinite}
+@keyframes capFlash{0%,100%{box-shadow:inset 0 0 50px 14px rgba(207,51,60,.5)}50%{box-shadow:inset 0 0 90px 34px rgba(207,51,60,.95)}}
+.cap-thanks{font-family:'Playfair Display',Georgia,serif;font-size:2.4rem;font-weight:700;color:var(--ivory);text-align:center;animation:capThanks .6s ease;text-shadow:0 0 30px rgba(207,51,60,.5)}
+@keyframes capThanks{0%{opacity:0;transform:scale(.85)}100%{opacity:1;transform:scale(1)}}
+
 /* ===== VOICE WAVE ===== */
 .voice-wave{display:flex;align-items:center;justify-content:center;gap:.3rem;height:3rem;--vc:var(--blue)}
 .voice-wave.big{height:4.5rem;gap:.4rem}
