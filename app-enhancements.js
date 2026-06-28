@@ -6,7 +6,7 @@
 
 /* ── Version gate: forces one clean navigation when new build detected ── */
 (function(){
-  var BUILD='v5-20260628-17';
+  var BUILD='v5-20260628-18';
   try{
     if(localStorage.getItem('_sys_build')!==BUILD){
       try{localStorage.setItem('_sys_build',BUILD);}catch(_){}
@@ -1082,22 +1082,27 @@ function _pickMime(kind){
   return '';
 }
 function _ext(mime){ if(/mp4/.test(mime))return 'mp4'; if(/webm/.test(mime))return 'webm'; if(/aac/.test(mime))return 'm4a'; return 'dat'; }
+/* James decides the camera at assign time. For Jacob, video & voice are a
+   fully automatic ritual: 3-2-1 countdown → records the exact time on the
+   chosen camera → edges flash near the end → "Thank you, Sir." → done.
+   No flip, no cancel, no stop, no re-record. */
 function openCapture(type,taskId){
   const task=state.tasks.find(t=>String(t.id)===String(taskId)); const reqs=taskReqs(task);
   if(!_pend||String(_pend.taskId)!==String(taskId)) _pend={taskId,photo:[],video:[],voice:[]};
-  _cap.facing=_cap.facing||'environment'; _cap.type=type; _cap.taskId=taskId; _cap.reqs=reqs;
+  _cap.type=type; _cap.taskId=taskId; _cap.reqs=reqs;
+  _cap.facing=(type==='photo'?(reqs.photo&&reqs.photo.camera):type==='video'?(reqs.video&&reqs.video.camera):null)||'environment';
+  const mirror=_cap.facing==='user';
   const m=document.createElement('div'); m.id='capture-modal';
   m.innerHTML=`<div class="fixed inset-0 z-[260]" style="background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:1rem">
-    <div style="position:relative;width:100%;max-width:30rem">
-      <video id="cap-video" autoplay muted playsinline style="width:100%;border-radius:1.25rem;background:#111;${type==='voice'?'display:none':''}"></video>
-      <video id="cap-review" controls playsinline style="display:none;width:100%;border-radius:1.25rem;background:#111"></video>
-      ${type!=='voice'?`<button id="cap-flip" onclick="flipCamera()" class="tap" style="position:absolute;top:.6rem;right:.6rem;width:2.6rem;height:2.6rem;border-radius:999px;background:rgba(0,0,0,.55);color:#fff;border:1px solid rgba(255,255,255,.3)"><i class="fa-solid fa-camera-rotate"></i></button>`:''}
+    <div id="cap-flash" style="position:absolute;inset:0;pointer-events:none;z-index:2"></div>
+    <div style="position:relative;width:100%;max-width:30rem;z-index:1">
+      <video id="cap-video" autoplay muted playsinline style="width:100%;border-radius:1.25rem;background:#111;${type==='voice'?'display:none':''};${mirror?'transform:scaleX(-1)':''}"></video>
     </div>
-    ${type==='voice'?`<div id="cap-voicewrap" style="width:12rem;height:12rem;border-radius:999px;background:radial-gradient(circle,rgba(143,17,24,.25),transparent);display:flex;align-items:center;justify-content:center"><i class="fa-solid fa-microphone" style="font-size:3.5rem;color:var(--rose)"></i></div><audio id="cap-review-audio" controls style="display:none;width:100%;margin-top:1rem"></audio>`:''}
-    <div id="cap-timer" style="font-size:1.6rem;font-weight:700;color:#fff;margin-top:1rem;font-variant-numeric:tabular-nums">—</div>
-    <div id="cap-hint" style="font-size:.8rem;color:var(--stone);margin-top:.25rem;text-align:center;max-width:22rem"></div>
-    <div id="cap-actions" style="display:flex;gap:1rem;margin-top:1.5rem;flex-wrap:wrap;justify-content:center"></div>
-    <button id="cap-cancel" onclick="cancelCapture()" style="margin-top:1.25rem;font-size:.8rem;color:var(--stone)">Cancel</button>
+    ${type==='voice'?`<div id="cap-voicewrap" style="width:12rem;height:12rem;border-radius:999px;background:radial-gradient(circle,rgba(143,17,24,.25),transparent);display:flex;align-items:center;justify-content:center;z-index:1"><i class="fa-solid fa-microphone" style="font-size:3.5rem;color:var(--rose)"></i></div>`:''}
+    <div id="cap-timer" style="font-size:2.4rem;font-weight:800;color:#fff;margin-top:1rem;font-variant-numeric:tabular-nums;z-index:1">—</div>
+    <div id="cap-hint" style="font-size:.8rem;color:var(--stone);margin-top:.25rem;text-align:center;max-width:22rem;z-index:1"></div>
+    <div id="cap-message" style="display:none;z-index:3"></div>
+    <div id="cap-actions" style="display:flex;gap:1rem;margin-top:1.5rem;flex-wrap:wrap;justify-content:center;z-index:1"></div>
   </div>`;
   document.getElementById('modal-container').appendChild(m);
   startCaptureFlow(type,taskId,reqs);
@@ -1106,70 +1111,54 @@ async function startCaptureFlow(type,taskId,reqs){
   const actions=document.getElementById('cap-actions'), hint=document.getElementById('cap-hint'), timer=document.getElementById('cap-timer');
   _stopStream();
   try{
-    const constraints=type==='voice'?{audio:true}:{video:{facingMode:_cap.facing},audio:type==='video'};
+    const constraints=type==='voice'?{audio:true}:{video:{facingMode:{ideal:_cap.facing}},audio:type==='video'};
     _cap.stream=await navigator.mediaDevices.getUserMedia(constraints);
-  }catch(err){ hint.textContent='Camera / microphone permission is required.'; actions.innerHTML=`<button onclick="cancelCapture()" class="tap" style="padding:.7rem 1.4rem;background:var(--red);border-radius:1rem;color:#fff">Close</button>`; return; }
-  if(type!=='voice'){ const v=document.getElementById('cap-video'); if(v){ v.style.display=''; v.srcObject=_cap.stream; } const rv=document.getElementById('cap-review'); if(rv)rv.style.display='none'; }
+  }catch(err){ if(hint)hint.textContent='Camera / microphone permission is required.'; if(actions)actions.innerHTML=`<button onclick="cancelCapture()" class="tap" style="padding:.7rem 1.4rem;background:var(--red);border-radius:1rem;color:#fff">Close</button>`; return; }
+  if(type!=='voice'){ const v=document.getElementById('cap-video'); if(v){ v.style.display=''; v.srcObject=_cap.stream; } }
   if(type==='photo'){
-    timer.textContent=''; hint.textContent='Tap the shutter for each photo. Flip for front / back camera.';
-    actions.innerHTML=`<button onclick="snapPhoto(${taskId})" class="tap" style="width:4.5rem;height:4.5rem;border-radius:999px;background:#fff;border:4px solid var(--red)"></button><button onclick="finishCapture()" class="tap" style="padding:.7rem 1.4rem;background:var(--sage-2);border-radius:1rem;color:#fff">Done</button>`;
+    if(timer)timer.textContent=''; if(hint)hint.textContent=`Take ${(reqs.photo&&reqs.photo.min)||1} on the ${_cap.facing==='user'?'front':'back'} camera.`;
+    if(actions)actions.innerHTML=`<button onclick="snapPhoto(${taskId})" class="tap" style="width:4.5rem;height:4.5rem;border-radius:999px;background:#fff;border:4px solid var(--red)"></button><button onclick="finishCapture()" class="tap" style="padding:.7rem 1.4rem;background:var(--sage-2);border-radius:1rem;color:#fff">Done</button>`;
   } else if(type==='video'){
-    const secs=reqs.video&&reqs.video.seconds||15;
-    timer.textContent=secs+'s'; hint.textContent=`Records ${secs}s then stops. You can cancel while recording, and re-record after.`;
-    actions.innerHTML=`<button onclick="startTimedRecord(${taskId},'video',${secs})" class="tap" style="padding:.85rem 1.6rem;background:var(--red);border-radius:1rem;color:#fff"><i class="fa-solid fa-circle-dot" style="margin-right:.4rem"></i>Start</button>`;
+    autoCountdown('video',(reqs.video&&reqs.video.seconds)||15);
   } else if(type==='voice'){
-    const secs=reqs.voice&&reqs.voice.minSeconds||10;
-    timer.textContent='0s'; hint.textContent=`Record at least ${secs}s. You can cancel while recording, and re-record after.`;
-    actions.innerHTML=`<button onclick="startVoiceRecord(${taskId},${secs})" class="tap" style="padding:.85rem 1.6rem;background:var(--red);border-radius:1rem;color:#fff"><i class="fa-solid fa-microphone" style="margin-right:.4rem"></i>Start</button>`;
+    autoCountdown('voice',(reqs.voice&&reqs.voice.minSeconds)||10);
   }
 }
-function flipCamera(){ _cap.facing=_cap.facing==='environment'?'user':'environment'; startCaptureFlow(_cap.type,_cap.taskId,_cap.reqs); }
 function snapPhoto(taskId){
   const v=document.getElementById('cap-video'); if(!v||!v.videoWidth)return;
   const c=document.createElement('canvas'); c.width=v.videoWidth; c.height=v.videoHeight;
   if(_cap.facing==='user'){ const ctx=c.getContext('2d'); ctx.translate(c.width,0); ctx.scale(-1,1); ctx.drawImage(v,0,0); } else { c.getContext('2d').drawImage(v,0,0); }
   c.toBlob(blob=>{ if(!blob)return; _pend.photo.push({blob,mime:'image/jpeg',ext:'jpg'}); const t=document.getElementById('cap-timer'); if(t)t.textContent=_pend.photo.length+' captured'; },'image/jpeg',0.9);
 }
-function startTimedRecord(taskId,type,secs){
-  if(!_cap.stream) return;
-  const actions=document.getElementById('cap-actions'), timer=document.getElementById('cap-timer'), hint=document.getElementById('cap-hint'), cancel=document.getElementById('cap-cancel');
-  const mime=_pickMime('video'); _cap.chunks=[]; _cap.recorder=mime?new MediaRecorder(_cap.stream,{mimeType:mime}):new MediaRecorder(_cap.stream); _cap.aborted=false;
+/* 3-2-1 then auto record */
+function autoCountdown(kind,secs){
+  const timer=document.getElementById('cap-timer'), hint=document.getElementById('cap-hint'), actions=document.getElementById('cap-actions');
+  if(actions)actions.innerHTML=''; if(hint)hint.textContent='Get ready…';
+  let c=3; if(timer){ timer.textContent=c; timer.classList.add('cap-big'); }
+  _cap.timer=setInterval(()=>{ c--; if(c>0){ if(timer)timer.textContent=c; } else { clearInterval(_cap.timer); _cap.timer=null; if(timer)timer.classList.remove('cap-big'); doAutoRecord(kind,secs); } },850);
+}
+function doAutoRecord(kind,secs){
+  if(!_cap.stream){ return; }
+  const timer=document.getElementById('cap-timer'), hint=document.getElementById('cap-hint'), flash=document.getElementById('cap-flash');
+  const mime=_pickMime(kind==='video'?'video':'audio');
+  _cap.chunks=[]; _cap.recorder=mime?new MediaRecorder(_cap.stream,{mimeType:mime}):new MediaRecorder(_cap.stream);
   _cap.recorder.ondataavailable=e=>{ if(e.data.size) _cap.chunks.push(e.data); };
-  _cap.recorder.onstop=()=>{ if(_cap.aborted)return; const mt=_cap.recorder.mimeType||mime||'video/webm'; reviewRecording('video',new Blob(_cap.chunks,{type:mt}),mt); };
-  _cap.recorder.start(); let left=secs; timer.textContent=left+'s'; hint.textContent='Recording…';
-  if(cancel)cancel.textContent='Cancel recording';
-  actions.innerHTML=`<button onclick="cancelRecording()" class="tap" style="padding:.85rem 1.6rem;background:rgba(143,17,24,.3);border-radius:1rem;color:var(--rose)"><i class="fa-solid fa-stop" style="margin-right:.4rem"></i>Cancel</button><div style="color:var(--red);font-weight:700;align-self:center"><i class="fa-solid fa-circle" style="margin-right:.4rem;animation:pulseZone 1s infinite"></i>REC</div>`;
-  _cap.timer=setInterval(()=>{ left--; timer.textContent=left+'s'; if(left<=0){ clearInterval(_cap.timer); try{_cap.recorder.stop();}catch(_){} } },1000);
+  _cap.recorder.onstop=()=>{ const mt=_cap.recorder.mimeType||mime||(kind==='video'?'video/mp4':'audio/mp4'); const blob=new Blob(_cap.chunks,{type:mt}); const item={blob,mime:mt,ext:_ext(mt)}; if(kind==='video')_pend.video=[item]; else _pend.voice=[item]; endAutoRecord(); };
+  _cap.recorder.start(); let left=secs; if(timer)timer.textContent=left+'s'; if(hint)hint.innerHTML='<i class="fa-solid fa-circle" style="color:var(--red);margin-right:.4rem;animation:pulseZone 1s infinite"></i>Recording — hold still.';
+  _cap.timer=setInterval(()=>{ left--; if(timer)timer.textContent=Math.max(0,left)+'s'; if(left<=3&&left>0&&flash)flash.classList.add('cap-flash-on'); if(left<=0){ clearInterval(_cap.timer); _cap.timer=null; try{_cap.recorder.stop();}catch(_){} } },1000);
 }
-function startVoiceRecord(taskId,minSecs){
-  if(!_cap.stream) return;
-  const actions=document.getElementById('cap-actions'), timer=document.getElementById('cap-timer'), hint=document.getElementById('cap-hint'), cancel=document.getElementById('cap-cancel');
-  const mime=_pickMime('audio'); _cap.chunks=[]; _cap.recorder=mime?new MediaRecorder(_cap.stream,{mimeType:mime}):new MediaRecorder(_cap.stream); _cap.aborted=false;
-  _cap.recorder.ondataavailable=e=>{ if(e.data.size) _cap.chunks.push(e.data); };
-  _cap.recorder.onstop=()=>{ if(_cap.aborted)return; const mt=_cap.recorder.mimeType||mime||'audio/webm'; reviewRecording('voice',new Blob(_cap.chunks,{type:mt}),mt); };
-  _cap.recorder.start(); let el=0; timer.textContent='0s'; hint.textContent='Recording…';
-  if(cancel)cancel.textContent='Cancel recording';
-  actions.innerHTML=`<button onclick="cancelRecording()" class="tap" style="padding:.85rem 1.4rem;background:rgba(143,17,24,.3);border-radius:1rem;color:var(--rose)"><i class="fa-solid fa-stop" style="margin-right:.4rem"></i>Cancel</button><button id="cap-stop" disabled class="tap" style="padding:.85rem 1.4rem;background:rgba(255,255,255,.1);border-radius:1rem;color:var(--stone)">Stop (${minSecs}s)</button>`;
-  _cap.timer=setInterval(()=>{ el++; timer.textContent=el+'s'; const stop=document.getElementById('cap-stop'); if(el>=minSecs&&stop){ stop.disabled=false; stop.style.background='var(--sage-2)'; stop.style.color='#fff'; stop.textContent='Stop'; stop.onclick=()=>{ clearInterval(_cap.timer); try{_cap.recorder.stop();}catch(_){} }; } },1000);
+function endAutoRecord(){
+  _stopStream();
+  const flash=document.getElementById('cap-flash'); if(flash)flash.classList.remove('cap-flash-on');
+  const v=document.getElementById('cap-video'); if(v)v.style.display='none';
+  const w=document.getElementById('cap-voicewrap'); if(w)w.style.display='none';
+  const timer=document.getElementById('cap-timer'); if(timer)timer.textContent='';
+  const hint=document.getElementById('cap-hint'); if(hint)hint.textContent='';
+  const msg=document.getElementById('cap-message'); if(msg){ msg.style.display=''; msg.innerHTML='<div class="cap-thanks">Thank you, Sir.</div>'; }
+  setTimeout(()=>{ finishCapture(); },2000);
 }
-/* abort an in-progress recording, discard it, return to the start state */
-function cancelRecording(){ _cap.aborted=true; if(_cap.timer){clearInterval(_cap.timer);_cap.timer=null;} try{ if(_cap.recorder&&_cap.recorder.state==='recording')_cap.recorder.stop(); }catch(_){} _cap.recorder=null; startCaptureFlow(_cap.type,_cap.taskId,_cap.reqs); }
-/* review step: preview the take, keep or re-record */
-function reviewRecording(kind,blob,mime){
-  if(_cap.timer){clearInterval(_cap.timer);_cap.timer=null;}
-  _stopStream(); _cap.pendingBlob={kind,blob,mime,ext:_ext(mime)};
-  const url=URL.createObjectURL(blob);
-  const hint=document.getElementById('cap-hint'), timer=document.getElementById('cap-timer'), actions=document.getElementById('cap-actions');
-  if(timer)timer.textContent='';
-  if(kind==='video'){ const v=document.getElementById('cap-video'); if(v)v.style.display='none'; const rv=document.getElementById('cap-review'); if(rv){ rv.style.display=''; rv.src=url; } }
-  else { const w=document.getElementById('cap-voicewrap'); if(w)w.style.display='none'; const a=document.getElementById('cap-review-audio'); if(a){ a.style.display=''; a.src=url; } }
-  if(hint)hint.textContent='Review your recording.';
-  if(actions)actions.innerHTML=`<button onclick="retakeRecording()" class="tap" style="padding:.8rem 1.4rem;background:rgba(255,255,255,.1);border-radius:1rem;color:var(--ivory)"><i class="fa-solid fa-rotate-left" style="margin-right:.4rem"></i>Re-record</button><button onclick="keepRecording()" class="tap" style="padding:.8rem 1.4rem;background:var(--sage-2);border-radius:1rem;color:#fff"><i class="fa-solid fa-check" style="margin-right:.4rem"></i>Use this</button>`;
-}
-function retakeRecording(){ _cap.pendingBlob=null; startCaptureFlow(_cap.type,_cap.taskId,_cap.reqs); }
-function keepRecording(){ const p=_cap.pendingBlob; if(!p)return; if(p.kind==='video')_pend.video=[p]; else _pend.voice=[p]; _cap.pendingBlob=null; finishCapture(); }
 function _stopStream(){ if(_cap.stream){ _cap.stream.getTracks().forEach(t=>t.stop()); _cap.stream=null; } if(_cap.timer){ clearInterval(_cap.timer); _cap.timer=null; } }
-function cancelCapture(){ _cap.aborted=true; try{ if(_cap.recorder&&_cap.recorder.state==='recording') _cap.recorder.stop(); }catch(_){} _stopStream(); _cap.recorder=null; _cap.pendingBlob=null; const m=document.getElementById('capture-modal'); if(m)m.remove(); }
+function cancelCapture(){ try{ if(_cap.recorder&&_cap.recorder.state==='recording') _cap.recorder.stop(); }catch(_){} _stopStream(); _cap.recorder=null; const m=document.getElementById('capture-modal'); if(m)m.remove(); }
 function finishCapture(){ _stopStream(); _cap.recorder=null; const m=document.getElementById('capture-modal'); if(m)m.remove(); refreshEvidenceCounts(); }
 function refreshEvidenceCounts(){
   if(!_pend)return;
@@ -1314,8 +1303,8 @@ function showAddTaskModal(){
       <label style="font-size:.7rem;color:rgba(198,166,66,.7)">DUE DATE &amp; TIME<input id="task-deadline" type="datetime-local" value="${_localDateTimeValue(def)}" class="beautiful-input" style="width:100%;padding:.75rem .85rem;border-radius:.85rem;margin-top:.3rem;display:block"></label>
       <select id="task-cat" class="beautiful-input" style="width:100%;padding:.85rem 1rem;border-radius:1rem"><option>Service</option><option>Chore</option><option>Personal</option><option>Reflective log</option><option>Consequence Task</option></select>
       <div><div style="font-size:.7rem;color:rgba(198,166,66,.7);margin-bottom:.5rem">REQUIRED PROOF — captured live, no uploads</div><div style="display:flex;flex-direction:column;gap:.55rem">
-        ${proofRow('photo','Photo','fa-camera',`<label style="font-size:.62rem;color:var(--stone)">Minimum photos<input id="req-photo-min" type="number" min="1" value="1" class="beautiful-input" style="width:100%;padding:.55rem;border-radius:.6rem;margin-top:.15rem;display:block"></label>`)}
-        ${proofRow('video','Video','fa-video',`<label style="font-size:.62rem;color:var(--stone)">Exact duration (seconds)<input id="req-video-sec" type="number" min="1" value="15" class="beautiful-input" style="width:100%;padding:.55rem;border-radius:.6rem;margin-top:.15rem;display:block"></label>`)}
+        ${proofRow('photo','Photo','fa-camera',`<label style="font-size:.62rem;color:var(--stone)">Minimum photos<input id="req-photo-min" type="number" min="1" value="1" class="beautiful-input" style="width:100%;padding:.55rem;border-radius:.6rem;margin-top:.15rem;display:block"></label>${_cameraPicker('photo')}`)}
+        ${proofRow('video','Video','fa-video',`<label style="font-size:.62rem;color:var(--stone)">Exact duration (seconds)<input id="req-video-sec" type="number" min="1" value="15" class="beautiful-input" style="width:100%;padding:.55rem;border-radius:.6rem;margin-top:.15rem;display:block"></label>${_cameraPicker('video')}`)}
         ${proofRow('voice','Voice Note','fa-microphone',`<label style="font-size:.62rem;color:var(--stone)">Minimum length (seconds)<input id="req-voice-sec" type="number" min="1" value="10" class="beautiful-input" style="width:100%;padding:.55rem;border-radius:.6rem;margin-top:.15rem;display:block"></label>`)}
         ${proofRow('text','Text Report','fa-pen',`<div style="display:grid;grid-template-columns:1fr 1fr;gap:.4rem"><label style="font-size:.62rem;color:var(--stone)">Min words<input id="req-text-min" type="number" min="0" value="0" class="beautiful-input" style="width:100%;padding:.55rem;border-radius:.6rem;margin-top:.15rem;display:block"></label><label style="font-size:.62rem;color:var(--stone)">Max words<input id="req-text-max" type="number" min="0" value="0" class="beautiful-input" style="width:100%;padding:.55rem;border-radius:.6rem;margin-top:.15rem;display:block"></label></div><label style="display:flex;align-items:center;gap:.5rem;font-size:.72rem;margin-top:.5rem"><input type="checkbox" id="req-text-spell" style="accent-color:var(--red)">Require spell-check</label>`)}
       </div></div>
@@ -1323,6 +1312,13 @@ function showAddTaskModal(){
     <div style="display:flex;gap:.75rem;margin-top:1.5rem"><button onclick="this.closest('.fixed').remove()" style="flex:1;padding:.85rem;border:1px solid rgba(255,255,255,.2);border-radius:1rem">Cancel</button><button onclick="addNewTask(this)" style="flex:1;padding:.85rem;background:var(--red);border-radius:1rem;color:#fff">Assign</button></div>
   </div></div>`;
   document.getElementById('modal-container').appendChild(modal);
+}
+function _cameraPicker(kind){
+  return `<div style="font-size:.62rem;color:var(--stone);margin-top:.5rem">CAMERA (you choose — Jacob can't change it)</div>
+  <div style="display:flex;gap:.4rem;margin-top:.2rem">
+    <button type="button" onclick="this.parentElement.querySelectorAll('button').forEach(x=>x.classList.remove('qd-on'));this.classList.add('qd-on');window['_cam_${kind}']='environment'" class="qd-btn pill tap qd-on" style="flex:1;padding:.45rem;font-size:.72rem"><i class="fa-solid fa-camera" style="margin-right:.3rem"></i>Back</button>
+    <button type="button" onclick="this.parentElement.querySelectorAll('button').forEach(x=>x.classList.remove('qd-on'));this.classList.add('qd-on');window['_cam_${kind}']='user'" class="qd-btn pill tap" style="flex:1;padding:.45rem;font-size:.72rem"><i class="fa-solid fa-user" style="margin-right:.3rem"></i>Front</button>
+  </div>`;
 }
 function setTaskTonight(){
   const d=new Date(); d.setHours(21,0,0,0); if(d<new Date()) d.setDate(d.getDate()+1);
@@ -1344,8 +1340,8 @@ function addNewTask(button){
   const required=['photo','video','voice','text'].filter(t=>document.getElementById('ev-'+t)?.checked);
   const numv=(id,d)=>{ const e=document.getElementById(id); const n=e?parseInt(e.value,10):NaN; return isNaN(n)?d:n; };
   const evidenceReqs={};
-  if(required.includes('photo')) evidenceReqs.photo={min:Math.max(1,numv('req-photo-min',1))};
-  if(required.includes('video')) evidenceReqs.video={seconds:Math.max(1,numv('req-video-sec',15))};
+  if(required.includes('photo')) evidenceReqs.photo={min:Math.max(1,numv('req-photo-min',1)),camera:window._cam_photo||'environment'};
+  if(required.includes('video')) evidenceReqs.video={seconds:Math.max(1,numv('req-video-sec',15)),camera:window._cam_video||'environment'};
   if(required.includes('voice')) evidenceReqs.voice={minSeconds:Math.max(1,numv('req-voice-sec',10))};
   if(required.includes('text')) evidenceReqs.text={minWords:Math.max(0,numv('req-text-min',0)),maxWords:Math.max(0,numv('req-text-max',0)),spellcheck:!!document.getElementById('req-text-spell')?.checked};
   const task={id:Date.now(),title,desc:document.getElementById('task-desc').value.trim(),due:date,dueAt,category:document.getElementById('task-cat').value,status:'pending',priority:2,requiredEvidence:required,evidenceReqs,attempt:1,assignedAt:new Date().toISOString(),evidence:[]};
