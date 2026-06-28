@@ -6,7 +6,7 @@
 
 /* ── Version gate: forces one clean navigation when new build detected ── */
 (function(){
-  var BUILD='v5-20260628-15';
+  var BUILD='v5-20260628-16';
   try{
     if(localStorage.getItem('_sys_build')!==BUILD){
       try{localStorage.setItem('_sys_build',BUILD);}catch(_){}
@@ -1064,75 +1064,109 @@ function updateWordCount(taskId){
   el.style.color=(r.minWords&&n<r.minWords)||(r.maxWords&&n>r.maxWords)?'var(--red)':'var(--stone)';
 }
 /* ── Live capture modal ── */
+/* pick a recordable mime the device actually supports (iOS = mp4, others = webm) */
+function _pickMime(kind){
+  const cands=kind==='video'
+    ? ['video/mp4;codecs=h264,aac','video/mp4','video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm']
+    : ['audio/mp4','audio/aac','audio/webm;codecs=opus','audio/webm'];
+  for(const c of cands){ try{ if(window.MediaRecorder&&MediaRecorder.isTypeSupported(c)) return c; }catch(_){} }
+  return '';
+}
+function _ext(mime){ if(/mp4/.test(mime))return 'mp4'; if(/webm/.test(mime))return 'webm'; if(/aac/.test(mime))return 'm4a'; return 'dat'; }
 function openCapture(type,taskId){
   const task=state.tasks.find(t=>String(t.id)===String(taskId)); const reqs=taskReqs(task);
   if(!_pend||String(_pend.taskId)!==String(taskId)) _pend={taskId,photo:[],video:[],voice:[]};
+  _cap.facing=_cap.facing||'environment'; _cap.type=type; _cap.taskId=taskId; _cap.reqs=reqs;
   const m=document.createElement('div'); m.id='capture-modal';
   m.innerHTML=`<div class="fixed inset-0 z-[260]" style="background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:1rem">
-    <video id="cap-video" autoplay muted playsinline style="width:100%;max-width:30rem;border-radius:1.25rem;background:#111;${type==='voice'?'display:none':''}"></video>
-    ${type==='voice'?`<div id="cap-voicewrap" style="width:14rem;height:14rem;border-radius:999px;background:radial-gradient(circle,rgba(143,17,24,.25),transparent);display:flex;align-items:center;justify-content:center"><i class="fa-solid fa-microphone" style="font-size:4rem;color:var(--rose)"></i></div>`:''}
+    <div style="position:relative;width:100%;max-width:30rem">
+      <video id="cap-video" autoplay muted playsinline style="width:100%;border-radius:1.25rem;background:#111;${type==='voice'?'display:none':''}"></video>
+      <video id="cap-review" controls playsinline style="display:none;width:100%;border-radius:1.25rem;background:#111"></video>
+      ${type!=='voice'?`<button id="cap-flip" onclick="flipCamera()" class="tap" style="position:absolute;top:.6rem;right:.6rem;width:2.6rem;height:2.6rem;border-radius:999px;background:rgba(0,0,0,.55);color:#fff;border:1px solid rgba(255,255,255,.3)"><i class="fa-solid fa-camera-rotate"></i></button>`:''}
+    </div>
+    ${type==='voice'?`<div id="cap-voicewrap" style="width:12rem;height:12rem;border-radius:999px;background:radial-gradient(circle,rgba(143,17,24,.25),transparent);display:flex;align-items:center;justify-content:center"><i class="fa-solid fa-microphone" style="font-size:3.5rem;color:var(--rose)"></i></div><audio id="cap-review-audio" controls style="display:none;width:100%;margin-top:1rem"></audio>`:''}
     <div id="cap-timer" style="font-size:1.6rem;font-weight:700;color:#fff;margin-top:1rem;font-variant-numeric:tabular-nums">—</div>
-    <div id="cap-hint" style="font-size:.8rem;color:var(--stone);margin-top:.25rem;text-align:center"></div>
-    <div id="cap-actions" style="display:flex;gap:1rem;margin-top:1.5rem"></div>
-    <button onclick="cancelCapture()" style="margin-top:1.5rem;font-size:.8rem;color:var(--stone)">Cancel</button>
+    <div id="cap-hint" style="font-size:.8rem;color:var(--stone);margin-top:.25rem;text-align:center;max-width:22rem"></div>
+    <div id="cap-actions" style="display:flex;gap:1rem;margin-top:1.5rem;flex-wrap:wrap;justify-content:center"></div>
+    <button id="cap-cancel" onclick="cancelCapture()" style="margin-top:1.25rem;font-size:.8rem;color:var(--stone)">Cancel</button>
   </div>`;
   document.getElementById('modal-container').appendChild(m);
   startCaptureFlow(type,taskId,reqs);
 }
 async function startCaptureFlow(type,taskId,reqs){
   const actions=document.getElementById('cap-actions'), hint=document.getElementById('cap-hint'), timer=document.getElementById('cap-timer');
+  _stopStream();
   try{
-    const constraints=type==='voice'?{audio:true}:{video:{facingMode:'environment'},audio:type==='video'};
+    const constraints=type==='voice'?{audio:true}:{video:{facingMode:_cap.facing},audio:type==='video'};
     _cap.stream=await navigator.mediaDevices.getUserMedia(constraints);
   }catch(err){ hint.textContent='Camera / microphone permission is required.'; actions.innerHTML=`<button onclick="cancelCapture()" class="tap" style="padding:.7rem 1.4rem;background:var(--red);border-radius:1rem;color:#fff">Close</button>`; return; }
-  if(type!=='voice'){ const v=document.getElementById('cap-video'); v.srcObject=_cap.stream; }
+  if(type!=='voice'){ const v=document.getElementById('cap-video'); if(v){ v.style.display=''; v.srcObject=_cap.stream; } const rv=document.getElementById('cap-review'); if(rv)rv.style.display='none'; }
   if(type==='photo'){
-    timer.textContent=''; hint.textContent='Tap the shutter for each photo.';
+    timer.textContent=''; hint.textContent='Tap the shutter for each photo. Flip for front / back camera.';
     actions.innerHTML=`<button onclick="snapPhoto(${taskId})" class="tap" style="width:4.5rem;height:4.5rem;border-radius:999px;background:#fff;border:4px solid var(--red)"></button><button onclick="finishCapture()" class="tap" style="padding:.7rem 1.4rem;background:var(--sage-2);border-radius:1rem;color:#fff">Done</button>`;
   } else if(type==='video'){
     const secs=reqs.video&&reqs.video.seconds||15;
-    timer.textContent=secs+'s'; hint.textContent=`Records exactly ${secs}s and stops automatically.`;
+    timer.textContent=secs+'s'; hint.textContent=`Records ${secs}s then stops. You can cancel while recording, and re-record after.`;
     actions.innerHTML=`<button onclick="startTimedRecord(${taskId},'video',${secs})" class="tap" style="padding:.85rem 1.6rem;background:var(--red);border-radius:1rem;color:#fff"><i class="fa-solid fa-circle-dot" style="margin-right:.4rem"></i>Start</button>`;
   } else if(type==='voice'){
     const secs=reqs.voice&&reqs.voice.minSeconds||10;
-    timer.textContent='0s'; hint.textContent=`Record at least ${secs}s. You can't stop early.`;
+    timer.textContent='0s'; hint.textContent=`Record at least ${secs}s. You can cancel while recording, and re-record after.`;
     actions.innerHTML=`<button onclick="startVoiceRecord(${taskId},${secs})" class="tap" style="padding:.85rem 1.6rem;background:var(--red);border-radius:1rem;color:#fff"><i class="fa-solid fa-microphone" style="margin-right:.4rem"></i>Start</button>`;
   }
 }
+function flipCamera(){ _cap.facing=_cap.facing==='environment'?'user':'environment'; startCaptureFlow(_cap.type,_cap.taskId,_cap.reqs); }
 function snapPhoto(taskId){
   const v=document.getElementById('cap-video'); if(!v||!v.videoWidth)return;
   const c=document.createElement('canvas'); c.width=v.videoWidth; c.height=v.videoHeight;
-  c.getContext('2d').drawImage(v,0,0);
-  c.toBlob(blob=>{ if(!blob)return; _pend.photo.push(blob); const t=document.getElementById('cap-timer'); if(t)t.textContent=_pend.photo.length+' captured'; },'image/jpeg',0.9);
+  if(_cap.facing==='user'){ const ctx=c.getContext('2d'); ctx.translate(c.width,0); ctx.scale(-1,1); ctx.drawImage(v,0,0); } else { c.getContext('2d').drawImage(v,0,0); }
+  c.toBlob(blob=>{ if(!blob)return; _pend.photo.push({blob,mime:'image/jpeg',ext:'jpg'}); const t=document.getElementById('cap-timer'); if(t)t.textContent=_pend.photo.length+' captured'; },'image/jpeg',0.9);
 }
 function startTimedRecord(taskId,type,secs){
   if(!_cap.stream) return;
-  const actions=document.getElementById('cap-actions'), timer=document.getElementById('cap-timer'), hint=document.getElementById('cap-hint');
-  _cap.chunks=[]; _cap.recorder=new MediaRecorder(_cap.stream);
+  const actions=document.getElementById('cap-actions'), timer=document.getElementById('cap-timer'), hint=document.getElementById('cap-hint'), cancel=document.getElementById('cap-cancel');
+  const mime=_pickMime('video'); _cap.chunks=[]; _cap.recorder=mime?new MediaRecorder(_cap.stream,{mimeType:mime}):new MediaRecorder(_cap.stream); _cap.aborted=false;
   _cap.recorder.ondataavailable=e=>{ if(e.data.size) _cap.chunks.push(e.data); };
-  _cap.recorder.onstop=()=>{ const blob=new Blob(_cap.chunks,{type:'video/webm'}); _pend.video=[blob]; finishCapture(); };
+  _cap.recorder.onstop=()=>{ if(_cap.aborted)return; const mt=_cap.recorder.mimeType||mime||'video/webm'; reviewRecording('video',new Blob(_cap.chunks,{type:mt}),mt); };
   _cap.recorder.start(); let left=secs; timer.textContent=left+'s'; hint.textContent='Recording…';
-  actions.innerHTML=`<div style="color:var(--red);font-weight:700"><i class="fa-solid fa-circle" style="margin-right:.4rem;animation:pulseZone 1s infinite"></i>REC</div>`;
+  if(cancel)cancel.textContent='Cancel recording';
+  actions.innerHTML=`<button onclick="cancelRecording()" class="tap" style="padding:.85rem 1.6rem;background:rgba(143,17,24,.3);border-radius:1rem;color:var(--rose)"><i class="fa-solid fa-stop" style="margin-right:.4rem"></i>Cancel</button><div style="color:var(--red);font-weight:700;align-self:center"><i class="fa-solid fa-circle" style="margin-right:.4rem;animation:pulseZone 1s infinite"></i>REC</div>`;
   _cap.timer=setInterval(()=>{ left--; timer.textContent=left+'s'; if(left<=0){ clearInterval(_cap.timer); try{_cap.recorder.stop();}catch(_){} } },1000);
 }
 function startVoiceRecord(taskId,minSecs){
   if(!_cap.stream) return;
-  const actions=document.getElementById('cap-actions'), timer=document.getElementById('cap-timer'), hint=document.getElementById('cap-hint');
-  _cap.chunks=[]; _cap.recorder=new MediaRecorder(_cap.stream);
+  const actions=document.getElementById('cap-actions'), timer=document.getElementById('cap-timer'), hint=document.getElementById('cap-hint'), cancel=document.getElementById('cap-cancel');
+  const mime=_pickMime('audio'); _cap.chunks=[]; _cap.recorder=mime?new MediaRecorder(_cap.stream,{mimeType:mime}):new MediaRecorder(_cap.stream); _cap.aborted=false;
   _cap.recorder.ondataavailable=e=>{ if(e.data.size) _cap.chunks.push(e.data); };
-  _cap.recorder.onstop=()=>{ const blob=new Blob(_cap.chunks,{type:'audio/webm'}); _pend.voice=[blob]; finishCapture(); };
-  _cap.recorder.start(); let el=0; _cap.startedAt=Date.now(); timer.textContent='0s'; hint.textContent='Recording…';
-  actions.innerHTML=`<button id="cap-stop" disabled class="tap" style="padding:.85rem 1.6rem;background:rgba(255,255,255,.1);border-radius:1rem;color:var(--stone)">Stop (${minSecs}s)</button>`;
+  _cap.recorder.onstop=()=>{ if(_cap.aborted)return; const mt=_cap.recorder.mimeType||mime||'audio/webm'; reviewRecording('voice',new Blob(_cap.chunks,{type:mt}),mt); };
+  _cap.recorder.start(); let el=0; timer.textContent='0s'; hint.textContent='Recording…';
+  if(cancel)cancel.textContent='Cancel recording';
+  actions.innerHTML=`<button onclick="cancelRecording()" class="tap" style="padding:.85rem 1.4rem;background:rgba(143,17,24,.3);border-radius:1rem;color:var(--rose)"><i class="fa-solid fa-stop" style="margin-right:.4rem"></i>Cancel</button><button id="cap-stop" disabled class="tap" style="padding:.85rem 1.4rem;background:rgba(255,255,255,.1);border-radius:1rem;color:var(--stone)">Stop (${minSecs}s)</button>`;
   _cap.timer=setInterval(()=>{ el++; timer.textContent=el+'s'; const stop=document.getElementById('cap-stop'); if(el>=minSecs&&stop){ stop.disabled=false; stop.style.background='var(--sage-2)'; stop.style.color='#fff'; stop.textContent='Stop'; stop.onclick=()=>{ clearInterval(_cap.timer); try{_cap.recorder.stop();}catch(_){} }; } },1000);
 }
+/* abort an in-progress recording, discard it, return to the start state */
+function cancelRecording(){ _cap.aborted=true; if(_cap.timer){clearInterval(_cap.timer);_cap.timer=null;} try{ if(_cap.recorder&&_cap.recorder.state==='recording')_cap.recorder.stop(); }catch(_){} _cap.recorder=null; startCaptureFlow(_cap.type,_cap.taskId,_cap.reqs); }
+/* review step: preview the take, keep or re-record */
+function reviewRecording(kind,blob,mime){
+  if(_cap.timer){clearInterval(_cap.timer);_cap.timer=null;}
+  _stopStream(); _cap.pendingBlob={kind,blob,mime,ext:_ext(mime)};
+  const url=URL.createObjectURL(blob);
+  const hint=document.getElementById('cap-hint'), timer=document.getElementById('cap-timer'), actions=document.getElementById('cap-actions');
+  if(timer)timer.textContent='';
+  if(kind==='video'){ const v=document.getElementById('cap-video'); if(v)v.style.display='none'; const rv=document.getElementById('cap-review'); if(rv){ rv.style.display=''; rv.src=url; } }
+  else { const w=document.getElementById('cap-voicewrap'); if(w)w.style.display='none'; const a=document.getElementById('cap-review-audio'); if(a){ a.style.display=''; a.src=url; } }
+  if(hint)hint.textContent='Review your recording.';
+  if(actions)actions.innerHTML=`<button onclick="retakeRecording()" class="tap" style="padding:.8rem 1.4rem;background:rgba(255,255,255,.1);border-radius:1rem;color:var(--ivory)"><i class="fa-solid fa-rotate-left" style="margin-right:.4rem"></i>Re-record</button><button onclick="keepRecording()" class="tap" style="padding:.8rem 1.4rem;background:var(--sage-2);border-radius:1rem;color:#fff"><i class="fa-solid fa-check" style="margin-right:.4rem"></i>Use this</button>`;
+}
+function retakeRecording(){ _cap.pendingBlob=null; startCaptureFlow(_cap.type,_cap.taskId,_cap.reqs); }
+function keepRecording(){ const p=_cap.pendingBlob; if(!p)return; if(p.kind==='video')_pend.video=[p]; else _pend.voice=[p]; _cap.pendingBlob=null; finishCapture(); }
 function _stopStream(){ if(_cap.stream){ _cap.stream.getTracks().forEach(t=>t.stop()); _cap.stream=null; } if(_cap.timer){ clearInterval(_cap.timer); _cap.timer=null; } }
-function cancelCapture(){ try{ if(_cap.recorder&&_cap.recorder.state==='recording') _cap.recorder.stop(); }catch(_){} _stopStream(); _cap.recorder=null; const m=document.getElementById('capture-modal'); if(m)m.remove(); }
+function cancelCapture(){ _cap.aborted=true; try{ if(_cap.recorder&&_cap.recorder.state==='recording') _cap.recorder.stop(); }catch(_){} _stopStream(); _cap.recorder=null; _cap.pendingBlob=null; const m=document.getElementById('capture-modal'); if(m)m.remove(); }
 function finishCapture(){ _stopStream(); _cap.recorder=null; const m=document.getElementById('capture-modal'); if(m)m.remove(); refreshEvidenceCounts(); }
 function refreshEvidenceCounts(){
   if(!_pend)return;
   const task=state.tasks.find(t=>String(t.id)===String(_pend.taskId)); const reqs=taskReqs(task);
   const pc=document.getElementById('cap-count-photo'); if(pc) pc.textContent=_pend.photo.length+'/'+((reqs.photo&&reqs.photo.min)||1);
-  const th=document.getElementById('cap-thumbs-photo'); if(th) th.innerHTML=_pend.photo.map(b=>`<img src="${URL.createObjectURL(b)}" style="width:3rem;height:3rem;object-fit:cover;border-radius:.5rem">`).join('');
+  const th=document.getElementById('cap-thumbs-photo'); if(th) th.innerHTML=_pend.photo.map(p=>`<img src="${URL.createObjectURL(p.blob)}" style="width:3rem;height:3rem;object-fit:cover;border-radius:.5rem">`).join('');
   const vc=document.getElementById('cap-count-video'); if(vc&&_pend.video.length) vc.textContent='Recorded ✓';
   const oc=document.getElementById('cap-count-voice'); if(oc&&_pend.voice.length) oc.textContent='Recorded ✓';
 }
@@ -1143,9 +1177,9 @@ function renderSubmittedEvidence(task){
     if(item.type==='text') return `<div class="glass" style="padding:1rem;border-radius:1rem"><div style="font-size:.65rem;color:rgba(198,166,66,.7);margin-bottom:.35rem">TEXT REPORT</div><div style="font-size:.85rem;white-space:pre-wrap">${escapeText(item.value)}</div></div>`;
     /* Only James can re-open / re-watch evidence. Jacob sees it is on file but cannot view. */
     if(!isDom) return `<div class="glass" style="padding:1rem;border-radius:1rem;display:flex;justify-content:space-between;align-items:center;opacity:.7"><span style="font-size:.85rem"><i class="fa-solid fa-paperclip" style="margin-right:.5rem"></i>${titleCase(item.type)} submitted</span><i class="fa-solid fa-lock" style="color:var(--stone)"></i></div>`;
-    if(item.type==='video') return `<div class="glass" style="padding:.75rem;border-radius:1rem"><div style="font-size:.65rem;color:rgba(198,166,66,.7);margin-bottom:.5rem">VIDEO</div><video src="${item.url}" controls playsinline style="width:100%;border-radius:.75rem;max-height:60vh"></video></div>`;
+    if(item.type==='video') return `<div class="glass" style="padding:.75rem;border-radius:1rem"><div style="font-size:.65rem;color:rgba(198,166,66,.7);margin-bottom:.5rem">VIDEO</div><video controls playsinline preload="metadata" style="width:100%;border-radius:.75rem;max-height:60vh"><source src="${item.url}" type="${item.mime||'video/mp4'}"></video><a href="${item.url}" target="_blank" rel="noopener" style="font-size:.7rem;color:var(--gold);display:inline-block;margin-top:.4rem">Open / download if it won't play</a></div>`;
     if(item.type==='photo') return `<a href="${item.url}" target="_blank" rel="noopener" class="glass" style="padding:.75rem;border-radius:1rem;display:block"><div style="font-size:.65rem;color:rgba(198,166,66,.7);margin-bottom:.5rem">PHOTO</div><img src="${item.url}" style="width:100%;border-radius:.75rem" loading="lazy"></a>`;
-    if(item.type==='voice') return `<div class="glass" style="padding:1rem;border-radius:1rem"><div style="font-size:.65rem;color:rgba(198,166,66,.7);margin-bottom:.5rem">VOICE NOTE</div><audio src="${item.url}" controls style="width:100%"></audio></div>`;
+    if(item.type==='voice') return `<div class="glass" style="padding:1rem;border-radius:1rem"><div style="font-size:.65rem;color:rgba(198,166,66,.7);margin-bottom:.5rem">VOICE NOTE</div><audio controls preload="metadata" style="width:100%"><source src="${item.url}" type="${item.mime||'audio/mp4'}"></audio></div>`;
     return `<a href="${item.url}" target="_blank" rel="noopener" class="glass" style="padding:1rem;border-radius:1rem;display:flex;justify-content:space-between;align-items:center"><span style="font-size:.85rem"><i class="fa-solid fa-paperclip" style="margin-right:.5rem"></i>${escapeText(item.name||item.type)}</span><i class="fa-solid fa-arrow-up-right-from-square" style="color:var(--gold)"></i></a>`;
   }).join('');
 }
@@ -1206,16 +1240,16 @@ async function submitTaskEvidence(taskId,button){
   try{
     const blobUploads=[];
     if(_pend){
-      _pend.photo.forEach((b,i)=>blobUploads.push({type:'photo',blob:b,name:'photo-'+(i+1)+'.jpg'}));
-      _pend.video.forEach((b,i)=>blobUploads.push({type:'video',blob:b,name:'video.webm'}));
-      _pend.voice.forEach((b,i)=>blobUploads.push({type:'voice',blob:b,name:'voice.webm'}));
+      _pend.photo.forEach((p,i)=>blobUploads.push({type:'photo',blob:p.blob,mime:p.mime||'image/jpeg',name:'photo-'+(i+1)+'.'+(p.ext||'jpg')}));
+      _pend.video.forEach((p)=>blobUploads.push({type:'video',blob:p.blob,mime:p.mime||p.blob.type||'video/mp4',name:'video.'+(p.ext||'mp4')}));
+      _pend.voice.forEach((p)=>blobUploads.push({type:'voice',blob:p.blob,mime:p.mime||p.blob.type||'audio/mp4',name:'voice.'+(p.ext||'m4a')}));
     }
     for(const u of blobUploads){
       button.textContent='Uploading '+titleCase(u.type)+'…';
       const ref=evidenceStorage.ref('evidence/'+taskId+'/'+Date.now()+'-'+u.name);
-      const file=new File([u.blob],u.name,{type:u.blob.type});
+      const file=new File([u.blob],u.name,{type:u.mime});
       const url=await uploadEvidenceFile(ref,file,button);
-      items.push({type:u.type,name:u.name,url,size:u.blob.size});
+      items.push({type:u.type,name:u.name,url,mime:u.mime,size:u.blob.size});
     }
     task.evidence=items; task.report=(items.find(i=>i.type==='text')||{}).value||'';
     state.evidence.unshift({id:Date.now(),taskId,title:task.title,date:new Date().toISOString(),items});
@@ -1670,7 +1704,7 @@ function addJournalEntry(button){
     if(nv){ tags.push(nv); if(!state.journalTags.includes(nv)) state.journalTags.push(nv); }
   }
   state.journal.unshift({id:Date.now(),title,body,date:new Date().toISOString(),attachments:[],tags});
-  addNotification('journal','Journal saved',title,'journal'); saveState(); button.closest('.fixed').remove(); renderJournal(); renderDashboard();
+  addNotification('review','Jacob submitted a journal entry',title,'journal','dom'); saveState(); button.closest('.fixed').remove(); renderJournal(); renderDashboard();
 }
 function openJournalEntry(id){
   if(state.currentRole!=='dom') return; /* sub cannot re-open */
@@ -1783,16 +1817,33 @@ function saveCheckIn(button){
 
 /* ── Notifications ── */
 function _isRead(id,baseRead){ return baseRead||ensureArray(state.readNotifIds).includes(id); }
+/* Audience routing — James and Jacob have COMPLETELY separate bells.
+   James (dom) sees what Jacob does; Jacob (sub) sees what James sends/decides. */
+function _inferAudience(title){
+  const t=(title||'').toLowerCase();
+  if(t.startsWith('jacob')||/new check-in from jacob|screenshot attempt|voice (verification|match)|reward redeemed/.test(t)) return 'dom';
+  if(t.startsWith('james')||/task assigned|task due|lock released|requires you to change/.test(t)) return 'sub';
+  return 'both';
+}
+function _forRole(n,role){ const a=n.audience||'both'; return a==='both'||a===role; }
 function derivedNotifications(){
-  const r=ensureArray(state.readNotifIds);
-  const manual=ensureArray(state.notifications).map(n=>({...n,manual:true,read:_isRead(n.id,n.read)}));
-  const tasks=state.tasks.filter(t=>t.status==='pending').slice(0,3).map(t=>({id:'task-'+t.id,type:'task',title:'Task due soon',body:t.title,time:getTimeLeft(t).text,tab:'tasks',read:r.includes('task-'+t.id),colourBorder:'border-l-[var(--blue)]'}));
-  const cons=activePunishments().slice(0,2).map(p=>({id:'consequence-'+p.id,type:'consequence',title:'Consequence active',body:p.title,time:getTimeLeft(p).text,tab:'protocols',panel:'consequences',read:r.includes('consequence-'+p.id),colourBorder:'border-l-[var(--red)]'}));
-  const rewards=ensureArray(state.starLog).slice(0,1).map(s=>({id:'reward-'+s.id,type:'reward',title:'Reward earned',body:(s.amount>0?'+':'')+s.amount+' stars · '+s.reason,time:formatUKDate(s.date),tab:'stars',read:r.includes('reward-'+s.id),colourBorder:'border-l-[var(--gold)]'}));
-  return [...manual,...tasks,...cons,...rewards];
+  const role=state.currentRole, r=ensureArray(state.readNotifIds);
+  const manual=ensureArray(state.notifications).filter(n=>_forRole(n,role)).map(n=>({...n,manual:true,read:_isRead(n.id,n.read)}));
+  /* Derived reminders are Jacob-facing only (his tasks/consequences/rewards) */
+  let derived=[];
+  if(role==='sub'){
+    const tasks=state.tasks.filter(t=>t.status==='pending').slice(0,3).map(t=>({id:'task-'+t.id,type:'task',title:'Task due soon',body:titleCase(t.title),time:getTimeLeft(t).text,tab:'tasks',read:r.includes('task-'+t.id),colourBorder:'border-l-[var(--blue)]'}));
+    const cons=activePunishments().slice(0,2).map(p=>({id:'consequence-'+p.id,type:'consequence',title:'Consequence active',body:titleCase(p.title),time:getTimeLeft(p).text,tab:'protocols',panel:'consequences',read:r.includes('consequence-'+p.id),colourBorder:'border-l-[var(--red)]'}));
+    derived=[...tasks,...cons];
+  } else {
+    /* James: tasks awaiting his review */
+    const review=state.tasks.filter(t=>t.status==='completed'&&!t.reviewed).slice(0,4).map(t=>({id:'review-'+t.id,type:'review',title:'Awaiting your review',body:titleCase(t.title),time:formatUKDate(t.completedDate),tab:'tasks',read:r.includes('review-'+t.id),colourBorder:'border-l-[var(--sage)]'}));
+    derived=[...review];
+  }
+  return [...manual,...derived];
 }
 function unreadNotifications(){ return derivedNotifications().filter(n=>!n.read); }
-function addNotification(type,title,body,tab){ state.notifications=ensureArray(state.notifications); const colourBorder=type==='reward'?'border-l-[var(--gold)]':type==='consequence'?'border-l-[var(--red)]':type==='review'?'border-l-[var(--sage)]':'border-l-[var(--blue)]'; state.notifications.unshift({id:'n-'+Date.now(),type,title,body,tab:tab||'dashboard',read:false,createdAt:new Date().toISOString(),colourBorder}); if(state.notifications.length>40)state.notifications.length=40; }
+function addNotification(type,title,body,tab,audience){ state.notifications=ensureArray(state.notifications); const colourBorder=type==='reward'?'border-l-[var(--gold)]':type==='consequence'?'border-l-[var(--red)]':type==='review'?'border-l-[var(--sage)]':'border-l-[var(--blue)]'; state.notifications.unshift({id:'n-'+Date.now(),type,title,body,tab:tab||'dashboard',audience:audience||_inferAudience(title),read:false,createdAt:new Date().toISOString(),colourBorder}); if(state.notifications.length>40)state.notifications.length=40; }
 function renderNotifications(){
   const tab=document.getElementById('tab-notifications'); if(!tab)return;
   const items=derivedNotifications().filter(n=>activeNotificationsFilter==='all'||n.type===activeNotificationsFilter);
@@ -1896,12 +1947,13 @@ function renderSettings(){
       <div><div style="font-weight:600;font-size:.9rem">Voice verification</div><div style="font-size:.72rem;color:var(--stone)">Surprise voice check after Jacob's PIN${state.voice&&state.voice.enabled?` · ${ensureArray(state.voice.samples).length}/10 enrolled`:''}${state.voice&&state.voice.lastResult?` · last ${state.voice.lastResult.band} ${state.voice.lastResult.score}%`:''}</div></div>
       <span class="switch${state.voice&&state.voice.enabled?' on':''}"><span class="knob"></span></span>
     </div>
-    ${state.voice&&state.voice.enabled?`<button onclick="showVoiceSetup()" class="tap" style="width:100%;margin-top:.5rem;padding:.7rem;background:rgba(49,91,122,.25);border-radius:1rem;color:var(--blue);font-size:.82rem"><i class="fa-solid fa-microphone" style="margin-right:.3rem"></i>${ensureArray(state.voice.samples).length>=10?'Re-enrol Jacob'+String.fromCharCode(39)+'s voice':'Enrol Jacob'+String.fromCharCode(39)+'s voice ('+ensureArray(state.voice.samples).length+'/10)'}</button>`:''}
+    ${state.voice&&state.voice.enabled?`<div style="font-size:.72rem;color:var(--stone);margin-top:.5rem;padding:.6rem .85rem;background:rgba(49,91,122,.15);border-radius:.85rem"><i class="fa-solid fa-circle-info" style="margin-right:.3rem;color:var(--blue)"></i>Jacob enrols his voice <b>on his own device</b> — he'll be prompted automatically next time he logs in (${ensureArray(state.voice.samples).length}/10 done).${ensureArray(state.voice.samples).length>=10?` <button onclick="resetVoiceEnrolment()" style="color:var(--rose);text-decoration:underline">Reset</button>`:''}</div>`:''}
   </section>
   <section class="card" style="padding:1.25rem;margin-bottom:1.25rem"><div style="font-weight:600;font-size:1.1rem;margin-bottom:.85rem">Data Management</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem"><button onclick="exportSystemBackup()" class="subtle-card tap" style="padding:1rem;text-align:left;display:block;cursor:pointer"><i class="fa-solid fa-download" style="color:var(--gold)"></i><div style="font-weight:600;margin-top:.5rem;font-size:.9rem">Export Backup</div><div style="font-size:.75rem;color:var(--stone)">JSON download</div></button><label class="subtle-card tap" style="padding:1rem;text-align:left;display:block;cursor:pointer"><i class="fa-solid fa-upload" style="color:var(--blue)"></i><div style="font-weight:600;margin-top:.5rem;font-size:.9rem">Restore Backup</div><div style="font-size:.75rem;color:var(--stone)">Import JSON</div><input type="file" accept="application/json" style="display:none" onchange="restoreSystemBackup(this)"></label></div></section><section class="card" style="padding:1.25rem;margin-bottom:1.25rem"><div style="font-weight:600;font-size:1.1rem;margin-bottom:.85rem">Reset From Scratch</div><div style="display:flex;flex-direction:column;gap:.5rem">${[['demo','Reset demo data'],['profile','Reset profile'],['protocols','Reset protocols'],['tasks','Reset tasks'],['rewards','Reset rewards'],['notifications','Reset notifications'],['local','Clear local device cache']].map(([key,label])=>`<button onclick="resetSection('${key}')" class="tap" style="display:flex;justify-content:space-between;align-items:center;padding:.85rem 1rem;background:rgba(255,255,255,.05);border-radius:1rem;text-align:left"><span>${label}</span><i class="fa-solid fa-rotate-left" style="color:var(--stone)"></i></button>`).join('')}</div></section><section class="card" style="padding:1.25rem;border:1px solid rgba(143,17,24,.4)"><div style="font-weight:600;font-size:1.1rem;color:var(--red);margin-bottom:.5rem">Danger Zone</div><div style="font-size:.85rem;color:var(--stone);margin-bottom:1rem">This backs up the current system locally, then resets all shared app data. Requires typed confirmation.</div><button onclick="resetEverything()" style="width:100%;padding:.85rem;background:var(--red);border-radius:1rem;color:#fff">Reset Everything</button></section>`;
 }
 function toggleStarSpending(){ state.appSettings=state.appSettings||{}; state.appSettings.starSpending=!(state.appSettings.starSpending!==false); saveState(); renderSettings(); }
-function toggleVoiceVerify(){ if(state.currentRole!=='dom')return; state.voice=state.voice||{enabled:false,samples:[]}; state.voice.enabled=!state.voice.enabled; saveState(); renderSettings(); if(state.voice.enabled&&ensureArray(state.voice.samples).length<10) setTimeout(()=>showVoiceSetup(),250); }
+function toggleVoiceVerify(){ if(state.currentRole!=='dom')return; state.voice=state.voice||{enabled:false,samples:[]}; state.voice.enabled=!state.voice.enabled; saveState(); renderSettings(); if(state.voice.enabled&&ensureArray(state.voice.samples).length<10) showToast("Jacob will be asked to enrol his voice on his own device",'info'); }
+function resetVoiceEnrolment(){ if(state.currentRole!=='dom')return; if(!confirm("Clear Jacob's voice samples? He'll re-enrol on his device next login."))return; state.voice.samples=[]; saveState(); renderSettings(); }
 function forceJacobPin(){ if(state.currentRole!=='dom')return; state.forceJacobPinChange=true; addNotification('task','James requires you to change your PIN','Set a new 6-digit PIN.','dashboard'); saveState(); showToast('Jacob will be asked to change his PIN','success'); }
 function releaseLock(){ if(state.currentRole!=='dom')return; state.appLock={locked:false}; state.pinFails=0; ensureArray(state.tasks).forEach(t=>{ t.overdueHandled=false; }); saveState(); renderSettings(); enforceLock(); showToast('Lock released','success'); }
 function resetAccessBootstrap(){ if(state.currentRole!=='dom')return; if(!confirm('Reset access to the bootstrap codes? You will set fresh PINs at next login. Use this only if you are locked out.'))return; state.auth={configured:false}; state.appLock={locked:false}; state.pinFails=0; saveState(); showToast('Access reset — set new PINs at next login','success'); }
