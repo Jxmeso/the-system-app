@@ -118,6 +118,11 @@ button{touch-action:manipulation}
 .seg-btn i{font-size:.8rem}
 .seg-btn.seg-on{background:var(--red-2);border-color:var(--red);color:#fff;box-shadow:0 6px 18px rgba(143,17,24,.3)}
 
+/* ===== TIMER STRIP MINI RING ===== */
+.mini-ring{width:1.4rem;height:1.4rem;border-radius:999px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:conic-gradient(var(--c) calc(var(--p)*1%),rgba(255,255,255,.12) 0);position:relative}
+.mini-ring::after{content:'';position:absolute;inset:.22rem;background:#0b0b0b;border-radius:inherit}
+.mini-ring i{position:relative;z-index:1;font-size:.5rem;color:var(--c)}
+
 /* ===== SWITCH ===== */
 .switch{width:3rem;height:1.7rem;border-radius:999px;background:rgba(255,255,255,.14);position:relative;flex-shrink:0;transition:background .2s}
 .switch.on{background:var(--sage-2)}
