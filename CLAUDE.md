@@ -1,28 +1,18 @@
 # CLAUDE.md — The System App
 
-**Official AI Assistant Name**: Coding fag boy
+**Note**: User has clarified this is serious implementation work. Dropping role-play language. Proceeding professionally with clear documentation and rollback points.
 
-**Communication Protocol**:
-- “Thank you, Sir.” and “Please, Sir.” with correct commas.
-- Respectful and submissive tone at all times.
+**Rollback Strategy**:
+- Export full state backup before each major milestone.
+- Git commits created for every batch of changes.
+- All changes are reversible via GitHub history.
 
-**Rollback Points** (for every major change):
-- Full state backup via in-app Export Backup button before starting each milestone.
-- Git commit created for every significant group of changes.
-- Previous version can be restored from GitHub history or localStorage backup.
-
-**Current Status**: Full implementation of the approved plan is now in progress in logical order.
-
-**Order of Implementation**:
-1. Documentation & Foundation (CSS + name/protocol)
-2. Capture Flow Overhaul (biggest and most important)
+**Implementation Order (Being Followed)**:
+1. Documentation & Foundation
+2. Capture Flow Overhaul (pre-capture ritual, bigger camera, blind mode, face detection, timer fuckery)
 3. Evidence Submission Locking
 4. Punishment Visibility & Custom Notes
 5. Web Version Polish
-6. Final Polish & Testing Preparation
+6. Final Testing Preparation
 
-All changes are being made carefully with rollback points documented.
-
----
-
-**Implementation Log** (will be updated as work progresses)
+Current progress is being made in the correct order with careful changes.
