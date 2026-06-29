@@ -185,9 +185,9 @@ button{touch-action:manipulation}
 /* S lettermark draws in */
 .sl-s{animation:slDraw 1.4s cubic-bezier(.55,.05,.15,1) forwards}
 @keyframes slDraw{to{stroke-dashoffset:0}}
-/* Halo ring slowly spins */
+/* Halo ring slowly spins — transform-origin/box are on the SVG element, not in keyframe */
 .sl-ring{animation:slRingSpin 20s linear infinite}
-@keyframes slRingSpin{to{transform:rotate(360deg);transform-origin:50px 50px;transform-box:fill-box}}
+@keyframes slRingSpin{to{transform:rotate(360deg)}}
 /* End-cap dots blink in, then pulse */
 .sl-dot{opacity:0;animation:slDotIn .4s ease forwards 1.2s,slDotPulse 2.5s ease-in-out infinite 1.8s}
 .sl-dot-s{animation-delay:1.4s,2.1s}
@@ -195,10 +195,11 @@ button{touch-action:manipulation}
 @keyframes slDotPulse{0%,100%{r:4}50%{r:5.5}}
 
 /* ===== HELPER BUBBLE ===== */
-.helper-bubble{position:relative;border-radius:1.5rem;padding:1.1rem 1.25rem;background:linear-gradient(135deg,rgba(var(--hc-rgb,198,166,66),.08),rgba(var(--hc-rgb,198,166,66),.04));border:1.5px solid color-mix(in srgb,var(--hc,var(--gold)) 45%,transparent);overflow:visible;cursor:pointer;text-align:left}
-.helper-bubble::before{content:'';position:absolute;inset:-2px;border-radius:calc(1.5rem + 2px);border:1px solid color-mix(in srgb,var(--hc,var(--gold)) 25%,transparent);animation:helperGlow 2.8s ease-in-out infinite;pointer-events:none}
+/* --hc-rgb must be set inline as "R,G,B" for rgba() to work on all browsers (no color-mix needed) */
+.helper-bubble{position:relative;border-radius:1.5rem;padding:1.1rem 1.25rem;background:linear-gradient(135deg,rgba(var(--hc-rgb,198,166,66),.08),rgba(var(--hc-rgb,198,166,66),.04));border:1.5px solid rgba(var(--hc-rgb,198,166,66),.45);overflow:visible;cursor:pointer;text-align:left}
+.helper-bubble::before{content:'';position:absolute;inset:-2px;border-radius:calc(1.5rem + 2px);border:1px solid rgba(var(--hc-rgb,198,166,66),.25);animation:helperGlow 2.8s ease-in-out infinite;pointer-events:none}
 @keyframes helperGlow{0%,100%{opacity:.4;box-shadow:0 0 14px -4px var(--hc,var(--gold))}50%{opacity:1;box-shadow:0 0 28px -4px var(--hc,var(--gold))}}
-.helper-icon-wrap{width:3rem;height:3rem;border-radius:1rem;background:color-mix(in srgb,var(--hc,var(--gold)) 18%,transparent);border:1px solid color-mix(in srgb,var(--hc,var(--gold)) 35%,transparent);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.helper-icon-wrap{width:3rem;height:3rem;border-radius:1rem;background:rgba(var(--hc-rgb,198,166,66),.18);border:1px solid rgba(var(--hc-rgb,198,166,66),.35);display:flex;align-items:center;justify-content:center;flex-shrink:0}
 /* Sparkle ring — pseudo-element dots orbiting the bubble */
 .helper-sparkle-ring{position:absolute;inset:-10px;border-radius:calc(1.5rem + 10px);pointer-events:none;overflow:visible}
 .helper-sparkle-ring::before,.helper-sparkle-ring::after{content:'✦';position:absolute;font-size:.7rem;color:var(--hc,var(--gold));opacity:0;animation:helperSparkle 3s ease-in-out infinite}

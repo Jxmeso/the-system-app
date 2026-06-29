@@ -6,7 +6,7 @@
 
 /* ── Version gate: forces one clean navigation when new build detected ── */
 (function(){
-  var BUILD='v5-20260629-white-screen-recovery-1';
+  var BUILD='v5-20260629-02';
   try{
     if(localStorage.getItem('_sys_build')!==BUILD){
       try{localStorage.setItem('_sys_build',BUILD);}catch(_){}
@@ -211,6 +211,7 @@ const HELPER_TYPES = [
   ['timeout','Time Out','fa-hourglass-half','#c77d3a'],
   ['linewriting','Line Writing','fa-pen-nib','#315b7a']
 ];
+function _hexToRgb(h){const v=parseInt((h||'#888').replace('#',''),16);return`${(v>>16)&255},${(v>>8)&255},${v&255}`;}
 /* End-of-video messages from James — degradation/praise play, Title Case.
    Consensual D/s between James and Jacob. A random one shows after the red flash. */
 const PRAISE_MESSAGES = [
@@ -429,7 +430,7 @@ function systemLogoSVG(size){
     <!-- Outer halo ring -->
     <circle cx="50" cy="50" r="46" stroke="rgba(198,166,66,0.25)" stroke-width="1"/>
     <!-- Inner ring, slowly rotating dashes -->
-    <circle class="sl-ring" cx="50" cy="50" r="41" stroke="rgba(198,166,66,0.18)" stroke-width="1" stroke-dasharray="8 12" fill="none"/>
+    <circle class="sl-ring" cx="50" cy="50" r="41" stroke="rgba(198,166,66,0.18)" stroke-width="1" stroke-dasharray="8 12" fill="none" style="transform-origin:50px 50px;transform-box:fill-box"/>
     <!-- S lettermark: clean cubic-bezier S path -->
     <path class="sl-s" filter="url(#slSoft)"
       d="M 65 30 C 65 18 35 18 35 30 C 35 42 65 58 65 70 C 65 82 35 82 35 70"
@@ -875,10 +876,10 @@ function subActiveCards(){
   if(state.requestBoxOpen) chips.push(_chip('fa-hand','var(--gold)','Request','showMakeRequest()'));
   const helperHtml=activeHelpers.map(h=>{
     const def=HELPER_TYPES.find(t=>t[0]===h.type)||['','Helper','fa-hands-holding-circle','#888'];
-    return `<button onclick="viewHelper('${h.id}')" class="tap helper-bubble" style="--hc:${def[3]};width:100%;margin-bottom:.9rem;display:block">
+    return `<button onclick="viewHelper('${h.id}')" class="tap helper-bubble" style="--hc:${def[3]};--hc-rgb:${_hexToRgb(def[3])};width:100%;margin-bottom:.9rem;display:block">
       <div class="helper-sparkle-ring"></div>
       <div style="display:flex;align-items:center;gap:1rem;position:relative;z-index:1">
-        <div class="helper-icon-wrap" style="--hc:${def[3]}"><i class="fa-solid ${def[2]}" style="font-size:1.6rem;color:${def[3]}"></i></div>
+        <div class="helper-icon-wrap"><i class="fa-solid ${def[2]}" style="font-size:1.6rem;color:${def[3]}"></i></div>
         <div style="flex:1;text-align:left">
           <div style="font-size:.6rem;letter-spacing:3px;color:${def[3]};margin-bottom:.25rem">FROM JAMES</div>
           <div style="font-weight:700;font-size:1.05rem;color:var(--ivory)">${def[1]}</div>
