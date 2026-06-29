@@ -6,7 +6,7 @@
 
 /* ── Version gate: forces one clean navigation when new build detected ── */
 (function(){
-  var BUILD='v5-20260628-20';
+  var BUILD='v5-20260629-01';
   try{
     if(localStorage.getItem('_sys_build')!==BUILD){
       try{localStorage.setItem('_sys_build',BUILD);}catch(_){}
@@ -43,6 +43,16 @@ const ASPIRATION_BADGES = [
   {id:'asp-legend',name:'Cornerstone',icon:'fa-gem',goal:'Earn five hundred stars.'}
 ];
 function allBadges(){ return [...SYSTEM_BADGES,...ASPIRATION_BADGES,...ensureArray(state.customBadges)]; }
+
+/* Service ladder — milestone levels Jacob climbs through starred dedication */
+const SERVICE_LADDER = [
+  {id:'sl-1', level:1, title:'Prospect',    icon:'fa-seedling',   stars:0,   col:'#9b9890', desc:'Just starting out.'},
+  {id:'sl-2', level:2, title:'Initiate',    icon:'fa-fire',       stars:25,  col:'#c6a642', desc:'Beginning to understand.'},
+  {id:'sl-3', level:3, title:'Committed',   icon:'fa-link',       stars:75,  col:'#8faf97', desc:'Proven, consistent service.'},
+  {id:'sl-4', level:4, title:'Devoted',     icon:'fa-heart',      stars:150, col:'#d97c8a', desc:'Deep loyalty demonstrated.'},
+  {id:'sl-5', level:5, title:'Established', icon:'fa-shield',     stars:300, col:'#315b7a', desc:'Trusted in all things.'},
+  {id:'sl-6', level:6, title:'Cornerstone', icon:'fa-gem',        stars:500, col:'#c6a642', desc:'The gold standard. Irreplaceable.'}
+];
 /* Rules sections — no "Protocols" naming */
 const RULE_SECTIONS = [
   ['arrivalProcedure','Arrival Procedure','fa-door-open'],
@@ -346,37 +356,60 @@ function showInstallGuide(){
   m.innerHTML=`<div class="fixed inset-0 bg-black/90 z-[300] flex items-center justify-center p-6" onclick="this.remove()"><div onclick="event.stopImmediatePropagation()" class="glass rounded-3xl p-7 max-w-sm text-center"><i class="fa-solid fa-circle-info text-4xl text-[var(--gold)] mb-4"></i><div class="text-xl font-semibold mb-3">Install Help</div><div class="text-sm text-[var(--stone)] leading-relaxed mb-2">On iPhone: open in Safari, tap the <strong>Share</strong> button, then <strong>Add to Home Screen</strong>.</div><div class="text-sm text-[var(--stone)] leading-relaxed">On Android: tap the browser menu and select <strong>Add to Home Screen</strong>.</div><button onclick="this.closest('.fixed').remove()" class="w-full mt-6 py-3 bg-[var(--red)] rounded-2xl">Got It</button></div></div>`;
   document.body.appendChild(m);
 }
-/* Animated "S Halo" logo — two interlocking arcs (oxblood + sage) with a
-   midnight accent and glowing end-points. Draws in, then breathes/pulses. */
+/* Clean monogram logo — bold S lettermark inside a double-ring halo.
+   Draws in on load, floats gently, glows at end-points. */
 function systemLogoSVG(size){
   size=size||118;
-  return `<svg class="sys-logo" viewBox="0 0 120 150" width="${size}" height="${Math.round(size*1.25)}" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="The System">
+  return `<svg class="sys-logo" viewBox="0 0 100 100" width="${size}" height="${size}" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="The System">
     <defs>
-      <linearGradient id="slR" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#cf333c"/><stop offset="1" stop-color="#6d0d12"/></linearGradient>
-      <linearGradient id="slS" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#a9d4af"/><stop offset="1" stop-color="#4c7a5e"/></linearGradient>
-      <filter id="slGlow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="2.6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      <linearGradient id="slG" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#e8c84a"/>
+        <stop offset="100%" stop-color="#9a7620"/>
+      </linearGradient>
+      <filter id="slGlow" x="-30%" y="-30%" width="160%" height="160%">
+        <feGaussianBlur stdDeviation="3" result="b"/>
+        <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+      <filter id="slSoft" x="-20%" y="-20%" width="140%" height="140%">
+        <feGaussianBlur stdDeviation="1.2" result="b"/>
+        <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
     </defs>
-    <g filter="url(#slGlow)">
-      <circle class="sl-arc sl-top" cx="60" cy="50" r="30" stroke="url(#slR)" stroke-width="7.5" stroke-linecap="round" stroke-dasharray="150 250" stroke-dashoffset="150" transform="rotate(28 60 50)"/>
-      <circle class="sl-arc sl-bot" cx="60" cy="100" r="30" stroke="url(#slS)" stroke-width="7.5" stroke-linecap="round" stroke-dasharray="150 250" stroke-dashoffset="150" transform="rotate(208 60 100)"/>
-      <path class="sl-blue" d="M51 70 Q60 75 70 80" stroke="#3f78a6" stroke-width="6.5" stroke-linecap="round"/>
-    </g>
-    <circle class="sl-dot sl-dot-r" cx="86" cy="33" r="3.8" fill="#ff5a60"/>
-    <circle class="sl-dot sl-dot-s" cx="34" cy="117" r="3.8" fill="#aedcb4"/>
+    <!-- Outer halo ring -->
+    <circle cx="50" cy="50" r="46" stroke="rgba(198,166,66,0.25)" stroke-width="1"/>
+    <!-- Inner ring, slowly rotating dashes -->
+    <circle class="sl-ring" cx="50" cy="50" r="41" stroke="rgba(198,166,66,0.18)" stroke-width="1" stroke-dasharray="8 12" fill="none"/>
+    <!-- S lettermark: clean cubic-bezier S path -->
+    <path class="sl-s" filter="url(#slSoft)"
+      d="M 65 30 C 65 18 35 18 35 30 C 35 42 65 58 65 70 C 65 82 35 82 35 70"
+      stroke="url(#slG)" stroke-width="7" stroke-linecap="round" fill="none"
+      stroke-dasharray="160" stroke-dashoffset="160"/>
+    <!-- End-cap dots -->
+    <circle class="sl-dot sl-dot-r" cx="65" cy="30" r="4" fill="#cf333c" filter="url(#slGlow)"/>
+    <circle class="sl-dot sl-dot-s" cx="35" cy="70" r="4" fill="#8faf97" filter="url(#slGlow)"/>
   </svg>`;
+}
+function _loginHelpLinks(){
+  const fails=state.pinFails||0;
+  if(fails<2) return '';
+  return `<div style="margin-top:1.5rem;display:flex;flex-direction:column;gap:.55rem;align-items:center">
+    <button onclick="forgotPin()" style="font-size:.72rem;color:rgba(198,166,66,.7);text-decoration:underline">I've forgotten my PIN</button>
+    <button onclick="showInstallGuide()" style="font-size:.7rem;color:rgba(198,166,66,.45);text-decoration:underline">Install Help</button>
+  </div>`;
 }
 function buildKeypad(){
   const screen=document.getElementById('login-screen'); if(!screen)return;
   const _nav=document.getElementById('bottom-navigation'); if(_nav)_nav.style.display='none';
   screen.style.cssText='position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:#070707';
   screen.innerHTML=`<div style="max-width:22rem;width:100%;padding:0 1.75rem;text-align:center">
-    <div style="display:flex;justify-content:center;margin-bottom:1rem">${systemLogoSVG(120)}</div>
-    <h1 class="heading-serif" style="font-size:3.5rem;line-height:1;margin:0">The System</h1>
+    <div style="display:flex;justify-content:center;margin-bottom:1rem">${systemLogoSVG(112)}</div>
+    <h1 class="heading-serif" style="font-size:3.2rem;line-height:1;margin:0;letter-spacing:-.04em">The System</h1>
     ${(state.appLock&&state.appLock.locked)?'<p style="color:var(--rose);margin-top:.5rem;letter-spacing:3px;font-size:.75rem">LOCKED</p>':''}
     ${(state.appLock&&state.appLock.locked)?`<div style="margin:1rem auto 0;max-width:18rem;padding:.6rem .9rem;border-radius:.9rem;background:rgba(143,17,24,.2);border:1px solid rgba(143,17,24,.5);font-size:.72rem;color:#fca5a5">${escapeText(state.appLock.reason||"Awaiting James's judgement")}</div>`:''}
     <div id="pin-dots" style="display:flex;justify-content:center;gap:.7rem;margin:1.75rem 0">${[0,1,2,3,4,5].map(()=>`<span class="pin-dot" style="width:.85rem;height:.85rem;border-radius:999px;border:1.5px solid rgba(198,166,66,.55);display:inline-block"></span>`).join('')}</div>
     <p id="login-error" style="color:#f87171;font-size:.8rem;height:1.2rem;margin-bottom:.5rem"></p>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem">${[1,2,3,4,5,6,7,8,9].map(n=>`<button class="tap" onclick="keypadPress('${n}')" style="aspect-ratio:1.35;font-size:1.5rem;border-radius:1.25rem;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.12);color:var(--ivory);display:flex;align-items:center;justify-content:center">${n}</button>`).join('')}<button class="tap" onclick="keypadClear()" style="aspect-ratio:1.35;font-size:.8rem;border-radius:1.25rem;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.12);color:var(--ivory);letter-spacing:.05em">CLEAR</button><button class="tap" onclick="keypadPress('0')" style="aspect-ratio:1.35;font-size:1.5rem;border-radius:1.25rem;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.12);color:var(--ivory)">0</button><button class="tap" onclick="keypadBack()" style="aspect-ratio:1.35;font-size:1.25rem;border-radius:1.25rem;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.12);color:var(--ivory)"><i class="fa-solid fa-delete-left"></i></button></div>
+    <div id="login-help-links">${_loginHelpLinks()}</div>
   </div>`;
   window.currentPin='';
 }
@@ -424,7 +457,7 @@ function updatePinDots(){
     dot.style.border=i<(window.currentPin||'').length?'1.5px solid var(--gold)':'1.5px solid rgba(198,166,66,.55)';
   });
 }
-function _loginError(msg){ const e=document.getElementById('login-error'); if(e)e.textContent=msg; window.currentPin=''; updatePinDots(); }
+function _loginError(msg){ const e=document.getElementById('login-error'); if(e)e.textContent=msg; window.currentPin=''; updatePinDots(); const hl=document.getElementById('login-help-links'); if(hl)hl.innerHTML=_loginHelpLinks(); }
 async function attemptLogin(){
   const input=window.currentPin||'';
   const locked=state.appLock&&state.appLock.locked;
@@ -781,16 +814,31 @@ function showDomTools(){
   document.getElementById('modal-container').appendChild(m);
 }
 function toggleRequestBox(){ if(state.currentRole!=='dom')return; state.requestBoxOpen=!state.requestBoxOpen; saveState(); showToast('Request box '+(state.requestBoxOpen?'opened':'closed'),'success'); }
-/* ── Jacob's active items — compact chips, not big cards ── */
+/* ── Jacob's active items — helpers as sparkle bubbles; others as chips ── */
 function subActiveCards(){
+  const activeHelpers=ensureArray(state.helpers).filter(h=>h.active);
   const chips=[];
   if(state.activeCheckIn&&!state.activeCheckIn.done){ const left=getTimeLeft({dueAt:state.activeCheckIn.dueAt}); chips.push(_chip('fa-sliders','var(--blue)','Check-In','showCheckInModal()',left.text==='Overdue'?'now':left.text)); }
-  ensureArray(state.helpers).filter(h=>h.active).forEach(h=>{ const def=HELPER_TYPES.find(t=>t[0]===h.type)||['','Helper','fa-hands-holding-circle','#888']; chips.push(_chip(def[2],def[3],def[1],`viewHelper('${h.id}')`)); });
   ensureArray(state.memories).filter(mm=>!mm.reflectionDone).forEach(mm=>{ chips.push(_chip('fa-clock-rotate-left','var(--rose)','Memory',`viewMemory('${mm.id}')`,mm.viewed?'reflect':'view')); });
   if(state.suggestionBoxOpen) chips.push(_chip('fa-lightbulb','var(--gold)','Suggest','showSuggestPunishment()'));
   if(state.requestBoxOpen) chips.push(_chip('fa-hand','var(--gold)','Request','showMakeRequest()'));
-  if(!chips.length) return '';
-  return `<div class="seg-scroll" style="display:flex;gap:.5rem;overflow-x:auto;margin-bottom:1.1rem;padding-bottom:.3rem">${chips.join('')}</div>`;
+  const helperHtml=activeHelpers.map(h=>{
+    const def=HELPER_TYPES.find(t=>t[0]===h.type)||['','Helper','fa-hands-holding-circle','#888'];
+    return `<button onclick="viewHelper('${h.id}')" class="tap helper-bubble" style="--hc:${def[3]};width:100%;margin-bottom:.9rem;display:block">
+      <div class="helper-sparkle-ring"></div>
+      <div style="display:flex;align-items:center;gap:1rem;position:relative;z-index:1">
+        <div class="helper-icon-wrap" style="--hc:${def[3]}"><i class="fa-solid ${def[2]}" style="font-size:1.6rem;color:${def[3]}"></i></div>
+        <div style="flex:1;text-align:left">
+          <div style="font-size:.6rem;letter-spacing:3px;color:${def[3]};margin-bottom:.25rem">FROM JAMES</div>
+          <div style="font-weight:700;font-size:1.05rem;color:var(--ivory)">${def[1]}</div>
+          ${h.note?`<div style="font-size:.8rem;color:rgba(242,239,232,.65);margin-top:.2rem;line-height:1.4">${escapeText(h.note)}</div>`:''}
+        </div>
+        <i class="fa-solid fa-chevron-right" style="color:${def[3]};opacity:.6;flex-shrink:0"></i>
+      </div>
+    </button>`;
+  }).join('');
+  const chipHtml=chips.length?`<div class="seg-scroll" style="display:flex;gap:.5rem;overflow-x:auto;margin-bottom:1.1rem;padding-bottom:.3rem">${chips.join('')}</div>`:'';
+  return helperHtml+chipHtml;
 }
 function _chip(icon,col,label,fn,badge){
   return `<button onclick="${fn}" class="tap" style="flex-shrink:0;display:inline-flex;align-items:center;gap:.45rem;padding:.5rem .85rem;border-radius:999px;background:${col}1f;border:1px solid ${col}55"><i class="fa-solid ${icon}" style="color:${col};font-size:.85rem"></i><span style="font-size:.78rem;font-weight:600;color:var(--ivory)">${label}</span>${badge?`<span style="font-size:.62rem;color:${col};font-variant-numeric:tabular-nums">${escapeText(badge)}</span>`:''}</button>`;
@@ -1762,6 +1810,28 @@ function badgeCardHtml(b){
       :`<div class="badge-bar" style="margin-top:.5rem"><span style="width:${pct}%"></span></div><div style="font-size:.6rem;margin-top:.25rem;color:var(--stone)">${pr.cur}/${pr.goal}</div>`}
   </button>`;
 }
+function _serviceLadderHtml(stars){
+  const totalEarned=ensureArray(state.starLog).filter(s=>s.amount>0).reduce((a,s)=>a+s.amount,0);
+  const current=SERVICE_LADDER.slice().reverse().find(r=>totalEarned>=r.stars)||SERVICE_LADDER[0];
+  const next=SERVICE_LADDER.find(r=>r.stars>totalEarned);
+  const pct=next?Math.min(100,Math.round((totalEarned-current.stars)/(next.stars-current.stars)*100)):100;
+  return `<div class="card" style="padding:1.25rem;margin-bottom:1.75rem">
+    <div style="font-size:.6rem;letter-spacing:3px;color:rgba(198,166,66,.6);margin-bottom:.85rem">SERVICE LADDER</div>
+    <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem">
+      <div style="width:3rem;height:3rem;border-radius:1.1rem;background:${current.col}22;border:2px solid ${current.col}55;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+        <i class="fa-solid ${current.icon}" style="color:${current.col};font-size:1.3rem"></i>
+      </div>
+      <div style="flex:1">
+        <div style="font-weight:700;font-size:1.1rem">${escapeText(current.title)}</div>
+        <div style="font-size:.75rem;color:var(--stone)">${escapeText(current.desc)}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0"><div style="font-size:1.4rem;font-weight:800;color:var(--gold)">${totalEarned}</div><div style="font-size:.6rem;color:var(--stone)">TOTAL ★</div></div>
+    </div>
+    ${next?`<div style="margin-bottom:.5rem"><div style="display:flex;justify-content:space-between;font-size:.72rem;color:var(--stone);margin-bottom:.35rem"><span>→ ${escapeText(next.title)}</span><span>${totalEarned} / ${next.stars} ★</span></div><div style="height:.45rem;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden"><div style="height:100%;border-radius:999px;background:linear-gradient(90deg,${current.col},${next.col});width:${pct}%;transition:width .6s ease"></div></div></div>`:
+    `<div style="text-align:center;font-size:.8rem;color:var(--gold);padding:.25rem 0"><i class="fa-solid fa-crown" style="margin-right:.4rem"></i>Maximum level achieved.</div>`}
+    <div style="display:flex;gap:.4rem;overflow-x:auto;padding-top:.85rem;margin-top:.25rem;border-top:1px solid rgba(255,255,255,.07)">${SERVICE_LADDER.map(r=>{const done=totalEarned>=r.stars; return `<div title="${escapeText(r.title)}: ${r.stars}★" style="flex-shrink:0;width:2.2rem;height:2.2rem;border-radius:.75rem;background:${done?r.col+'33':'rgba(255,255,255,.04)'};border:1.5px solid ${done?r.col+'77':'rgba(255,255,255,.08)'};display:flex;align-items:center;justify-content:center"><i class="fa-solid ${r.icon}" style="font-size:.9rem;color:${done?r.col:'rgba(255,255,255,.18)'}"></i></div>`; }).join('')}</div>
+  </div>`;
+}
 function renderRewards(){
   const tab=document.getElementById('tab-stars'); if(!tab)return;
   const isDom=state.currentRole==='dom';
@@ -1800,6 +1870,8 @@ function renderRewards(){
           </div>
         </div>`; }).join('')||`<div style="font-size:.85rem;opacity:.6;padding:.5rem">No rewards yet.</div>`}
     </div>`:`<div class="card" style="padding:1rem 1.15rem;margin-bottom:1.75rem;display:flex;align-items:center;gap:.75rem;color:var(--stone);font-size:.85rem"><i class="fa-solid fa-lock"></i>Star spending is turned off.${isDom?' Toggle it in Settings.':''}</div>`}
+
+    ${_serviceLadderHtml(stars)}
 
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.85rem">
       <span style="font-weight:600;font-size:1.15rem"><i class="fa-solid fa-medal" style="color:var(--gold);margin-right:.4rem"></i>Badges</span>
