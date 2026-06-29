@@ -80,9 +80,9 @@ const NAV_ITEMS = [
   ['dashboard','Home','fa-house'],
   ['tasks','Tasks','fa-square-check'],
   ['protocols','Rules','fa-section'],
-  ['journal','Journal','fa-book-open'],
   ['stars','Rewards','fa-star']
 ];
+const DOM_NAV_ITEMS = [...NAV_ITEMS.slice(0,3),['evidence','Evidence','fa-photo-film'],NAV_ITEMS[3]];
 const DEFAULT_PHOTO = 'https://i.pravatar.cc/320?img=12';
 
 /* ── State: do NOT redeclare `state` — index.html's inline script already
@@ -93,6 +93,7 @@ const DEFAULT_PHOTO = 'https://i.pravatar.cc/320?img=12';
 var countdownTimer = null;
 var activeProtocolPanel = 'rules';
 var activeNotificationsFilter = 'all';
+var activeEvidenceFilter = 'all';
 
 /* ── Utilities ── */
 function titleCase(v){ return String(v||'').trim().toLowerCase().replace(/\b([a-z])/g,l=>l.toUpperCase()); }
@@ -152,7 +153,7 @@ const HELPER_TYPES = [
 /* End-of-video messages from James — degradation/praise play, Title Case.
    Consensual D/s between James and Jacob. A random one shows after the red flash. */
 const PRAISE_MESSAGES = [
-  'Such A Good Boy','Such A Little Fag','Well Done, Boy',"Who's A Good Boy Now?",
+  'Well Done, Faggot','Such A Good Boy','Such A Little Fag','Well Done, Boy',"Who's A Good Boy Now?",
   'And Control, You? Fuck, Yes!',"Let's Hope That Was Good Enough…",'Well, That Was A Good One',
   "You Look Pathetic. Wait, Was That A Mistake? We'll Have To See…",
   'Oh My God, You Must Feel So Humiliated Right Now','Pathetic Little Boy Of Mine',
@@ -319,8 +320,9 @@ function loadState(){
 /* ── Install: replace nav and add new screen containers ── */
 function installNavigation(){
   const nav=document.getElementById('bottom-navigation'); if(!nav)return;
+  const items=state&&state.currentRole==='dom'?DOM_NAV_ITEMS:NAV_ITEMS;
   nav.style.cssText='position:fixed;bottom:0;left:0;right:0;z-index:50;background:rgba(7,7,7,.95);border-top:1px solid rgba(255,255,255,.1);backdrop-filter:blur(22px)';
-  nav.innerHTML=`<div class="max-w-3xl mx-auto grid grid-cols-5 text-center text-xs" style="padding-bottom:max(1.1rem,env(safe-area-inset-bottom));padding-top:.5rem">${NAV_ITEMS.map(([tab,label,icon])=>`<button onclick="navigateToTab('${tab}')" class="nav-item tap py-1 flex flex-col items-center gap-0 cursor-pointer" data-tab="${tab}"><span class="nav-icon"><i class="fa-solid ${icon} text-lg"></i></span><span class="text-[10px] tracking-wide">${label}</span></button>`).join('')}</div>`;
+  nav.innerHTML=`<div class="max-w-3xl mx-auto grid text-center text-xs" style="grid-template-columns:repeat(${items.length},minmax(0,1fr));padding-bottom:max(1.1rem,env(safe-area-inset-bottom));padding-top:.5rem">${items.map(([tab,label,icon])=>`<button onclick="navigateToTab('${tab}')" class="nav-item tap py-1 flex flex-col items-center gap-0 cursor-pointer" data-tab="${tab}"><span class="nav-icon"><i class="fa-solid ${icon} text-lg"></i></span><span class="text-[10px] tracking-wide">${label}</span></button>`).join('')}</div>`;
 }
 function installScreens(){
   /* Append next to the EXISTING tabs so we inherit the content wrapper's
@@ -329,7 +331,7 @@ function installScreens(){
   const anchor=document.getElementById('tab-dashboard');
   const host=(anchor&&anchor.parentElement)||document.querySelector('#main-app .max-w-3xl.px-5')||document.getElementById('main-app');
   if(!host)return;
-  ['protocols','notifications','settings'].forEach(id=>{
+  ['protocols','evidence','notifications','settings'].forEach(id=>{
     if(!document.getElementById('tab-'+id)){
       const d=document.createElement('div');
       d.id='tab-'+id; d.className='tab-content hidden';
@@ -370,13 +372,11 @@ function buildKeypad(){
   screen.innerHTML=`<div style="max-width:22rem;width:100%;padding:0 1.75rem;text-align:center">
     <div style="display:flex;justify-content:center;margin-bottom:1rem">${systemLogoSVG(120)}</div>
     <h1 class="heading-serif" style="font-size:3.5rem;line-height:1;margin:0">The System</h1>
-    <p style="color:var(--gold);margin-top:.5rem;letter-spacing:3px;font-size:.75rem">${(state.appLock&&state.appLock.locked)?'LOCKED':'PRIVATE ACCESS'}</p>
+    ${(state.appLock&&state.appLock.locked)?'<p style="color:var(--rose);margin-top:.5rem;letter-spacing:3px;font-size:.75rem">LOCKED</p>':''}
     ${(state.appLock&&state.appLock.locked)?`<div style="margin:1rem auto 0;max-width:18rem;padding:.6rem .9rem;border-radius:.9rem;background:rgba(143,17,24,.2);border:1px solid rgba(143,17,24,.5);font-size:.72rem;color:#fca5a5">${escapeText(state.appLock.reason||"Awaiting James's judgement")}</div>`:''}
     <div id="pin-dots" style="display:flex;justify-content:center;gap:.7rem;margin:1.75rem 0">${[0,1,2,3,4,5].map(()=>`<span class="pin-dot" style="width:.85rem;height:.85rem;border-radius:999px;border:1.5px solid rgba(198,166,66,.55);display:inline-block"></span>`).join('')}</div>
     <p id="login-error" style="color:#f87171;font-size:.8rem;height:1.2rem;margin-bottom:.5rem"></p>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem">${[1,2,3,4,5,6,7,8,9].map(n=>`<button class="tap" onclick="keypadPress('${n}')" style="aspect-ratio:1.35;font-size:1.5rem;border-radius:1.25rem;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.12);color:var(--ivory);display:flex;align-items:center;justify-content:center">${n}</button>`).join('')}<button class="tap" onclick="keypadClear()" style="aspect-ratio:1.35;font-size:.8rem;border-radius:1.25rem;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.12);color:var(--ivory);letter-spacing:.05em">CLEAR</button><button class="tap" onclick="keypadPress('0')" style="aspect-ratio:1.35;font-size:1.5rem;border-radius:1.25rem;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.12);color:var(--ivory)">0</button><button class="tap" onclick="keypadBack()" style="aspect-ratio:1.35;font-size:1.25rem;border-radius:1.25rem;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.12);color:var(--ivory)"><i class="fa-solid fa-delete-left"></i></button></div>
-    <button onclick="forgotPin()" style="margin-top:1.5rem;font-size:.72rem;color:rgba(198,166,66,.7);text-decoration:underline">I've forgotten my PIN</button>
-    <button onclick="showInstallGuide()" style="display:block;margin:.75rem auto 0;font-size:.7rem;color:rgba(198,166,66,.5);text-decoration:underline">Install Help</button>
   </div>`;
   window.currentPin='';
 }
@@ -542,13 +542,16 @@ function updateRoleUI(){
   const isDom=state.currentRole==='dom';
   document.querySelectorAll('.dom-only').forEach(el=>el.style.display=isDom?'':'none');
   document.querySelectorAll('.sub-only').forEach(el=>el.style.display=isDom?'none':'');
+  document.body.classList.toggle('sub-role',!isDom);
+  const main=document.getElementById('main-app');
+  if(main&&!main.classList.contains('hidden')&&main.style.display!=='none') installNavigation();
   updateHeader();
   enforceLock(); renderTimerStrip();
 }
 
 /* ── Navigation ── */
 /* Screens Jacob may never reach — Dom-only (Jacob keeps his own notifications) */
-const DOM_ONLY_TABS=['settings'];
+const DOM_ONLY_TABS=['settings','evidence'];
 function navigateToTab(tab){
   if(tab==='limits'||tab==='rules'||tab==='punishments'){ activeProtocolPanel=tab==='limits'?'boundaries':tab==='rules'?'rules':'consequences'; tab='protocols'; }
   /* Phase 1 access control: Jacob cannot open Dom-only screens */
@@ -569,7 +572,7 @@ function renderCurrentTab(){
   if(tab==='dashboard') renderDashboard();
   else if(tab==='tasks') renderTasks();
   else if(tab==='protocols') renderProtocols();
-  else if(tab==='journal') renderJournal();
+  else if(tab==='evidence') renderEvidenceBank();
   else if(tab==='stars') renderRewards();
   else if(tab==='notifications') renderNotifications();
   else if(tab==='settings') renderSettings();
@@ -965,19 +968,15 @@ function renderDashboard(){
 
     ${isDom?domToolsCard():subActiveCards()}
 
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem;margin-bottom:2rem">
-      <div class="card" style="padding:1rem;text-align:center">
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:.75rem;margin-bottom:2rem">
+      <button onclick="navigateToTab('tasks')" class="card tap" style="padding:1rem;text-align:center">
         <div style="font-size:.6rem;color:rgba(198,166,66,.7);letter-spacing:2px;margin-bottom:.5rem">TASKS</div>
         <div style="font-size:2.25rem;font-weight:700;font-variant-numeric:tabular-nums">${completedCount}<span style="color:var(--stone);font-size:1rem">/${state.tasks.length}</span></div>
-      </div>
-      <div class="card" style="padding:1rem;text-align:center">
-        <div style="font-size:.6rem;color:rgba(198,166,66,.7);letter-spacing:2px;margin-bottom:.5rem">JOURNAL</div>
-        <div style="font-size:2.25rem;font-weight:700;font-variant-numeric:tabular-nums">${calculateJournalStreak()}</div>
-      </div>
-      <div class="card" style="padding:1rem;text-align:center">
-        <div style="font-size:.6rem;color:rgba(198,166,66,.7);letter-spacing:2px;margin-bottom:.5rem">ACTIVE</div>
+      </button>
+      <button onclick="activeProtocolPanel='consequences';navigateToTab('protocols')" class="card tap" style="padding:1rem;text-align:center">
+        <div style="font-size:.6rem;color:rgba(198,166,66,.7);letter-spacing:2px;margin-bottom:.5rem">ACTIVE CONSEQUENCES</div>
         <div id="dash-active-punish" style="font-size:2.25rem;font-weight:700;font-variant-numeric:tabular-nums">${activeP.length}</div>
-      </div>
+      </button>
     </div>
 
     <div style="margin-bottom:1.5rem">
@@ -1217,7 +1216,7 @@ function endAutoRecord(kind){
   const w=document.getElementById('cap-voicewrap'); if(w)w.style.display='none';
   const timer=document.getElementById('cap-timer'); if(timer)timer.textContent='';
   const hint=document.getElementById('cap-hint'); if(hint)hint.textContent='';
-  const msg=document.getElementById('cap-message'); if(msg){ msg.style.display=''; msg.innerHTML=`<div class="cap-thanks">Thank you, Sir.</div><div class="cap-praise">${escapeText(randomPraise())}</div>`; }
+  const msg=document.getElementById('cap-message'); if(msg){ msg.style.display=''; msg.innerHTML=`<div class="cap-praise">${escapeText(randomPraise())}</div>`; }
   setTimeout(()=>{ finishCapture(true); },2600);
 }
 function _stopStream(){ if(_cap.stream){ _cap.stream.getTracks().forEach(t=>t.stop()); _cap.stream=null; } if(_cap.timer){ clearInterval(_cap.timer); _cap.timer=null; } }
@@ -1274,6 +1273,35 @@ function renderSubmittedEvidence(task){
     if(item.type==='voice') return `<div class="glass" style="padding:1rem;border-radius:1rem"><div style="font-size:.65rem;color:rgba(198,166,66,.7);margin-bottom:.5rem">VOICE NOTE</div><audio controls preload="metadata" style="width:100%"><source src="${item.url}" type="${item.mime||'audio/mp4'}"></audio></div>`;
     return `<a href="${item.url}" target="_blank" rel="noopener" class="glass" style="padding:1rem;border-radius:1rem;display:flex;justify-content:space-between;align-items:center"><span style="font-size:.85rem"><i class="fa-solid fa-paperclip" style="margin-right:.5rem"></i>${escapeText(item.name||item.type)}</span><i class="fa-solid fa-arrow-up-right-from-square" style="color:var(--gold)"></i></a>`;
   }).join('');
+}
+
+/* Dominant-only evidence bank: every submitted item, grouped and playable. */
+function evidenceBankItems(){
+  const records=ensureArray(state.evidence).slice();
+  const indexed=new Set(records.map(r=>String(r.taskId)));
+  ensureArray(state.tasks).forEach(task=>{
+    if(ensureArray(task.evidence).length&&!indexed.has(String(task.id))){
+      records.push({id:'task-'+task.id,taskId:task.id,title:task.title,date:task.completedAt||task.completedDate||task.assignedAt,items:task.evidence});
+    }
+  });
+  return records.flatMap(record=>ensureArray(record.items).map(item=>({...item,record})));
+}
+function setEvidenceFilter(filter){ activeEvidenceFilter=filter; renderEvidenceBank(); }
+function evidenceBankMedia(item){
+  if(item.type==='video') return `<div class="evidence-media"><video controls playsinline preload="metadata" src="${item.url}"></video></div>`;
+  if(item.type==='photo') return `<a href="${item.url}" target="_blank" rel="noopener" class="evidence-media"><img src="${item.url}" loading="lazy" alt="Submitted photo"></a>`;
+  if(item.type==='voice') return `<div class="card" style="padding:1rem"><audio controls preload="metadata" src="${item.url}" style="width:100%"></audio></div>`;
+  if(item.type==='text') return `<div class="card" style="padding:1rem;font-size:.88rem;white-space:pre-wrap;line-height:1.65">${escapeText(item.value||'')}</div>`;
+  return `<a href="${item.url}" target="_blank" rel="noopener" class="card tap" style="padding:1rem;display:flex;justify-content:space-between"><span>${escapeText(item.name||'Attachment')}</span><i class="fa-solid fa-arrow-up-right-from-square" style="color:var(--gold)"></i></a>`;
+}
+function renderEvidenceBank(){
+  const tab=document.getElementById('tab-evidence'); if(!tab||state.currentRole!=='dom')return;
+  const all=evidenceBankItems();
+  const filters=[['all','All','fa-layer-group'],['video','Videos','fa-video'],['photo','Photos','fa-image'],['text','Text','fa-align-left'],['voice','Voice','fa-microphone'],['file','Files','fa-paperclip']];
+  const visible=activeEvidenceFilter==='all'?all:all.filter(item=>item.type===activeEvidenceFilter);
+  tab.innerHTML=`<div style="margin-bottom:1.25rem"><div class="heading-serif" style="font-size:2.5rem">Evidence Bank</div><div style="font-size:.8rem;color:var(--stone);margin-top:.2rem">Jacob’s submitted evidence, organised for your review.</div></div>
+    <div class="seg-scroll" style="display:flex;gap:.45rem;overflow-x:auto;padding-bottom:.65rem;margin-bottom:1rem">${filters.map(([id,label,icon])=>`<button onclick="setEvidenceFilter('${id}')" class="pill tap" style="padding:.45rem .85rem;white-space:nowrap;font-size:.72rem;${activeEvidenceFilter===id?'background:var(--gold);color:#111;border-color:var(--gold)':''}"><i class="fa-solid ${icon}" style="margin-right:.35rem"></i>${label} <span style="opacity:.6">${id==='all'?all.length:all.filter(x=>x.type===id).length}</span></button>`).join('')}</div>
+    <div style="display:flex;flex-direction:column;gap:1.25rem">${visible.map(item=>`<section><div style="display:flex;justify-content:space-between;align-items:end;margin:0 .2rem .45rem"><div><div style="font-weight:650">${escapeText(titleCase(item.record.title||'Evidence'))}</div><div style="font-size:.68rem;color:var(--stone)">${formatUKDate(item.record.date)} · ${formatUKTime(item.record.date)}</div></div><span style="font-size:.6rem;color:var(--gold);letter-spacing:1.5px;text-transform:uppercase">${escapeText(item.type)}</span></div>${evidenceBankMedia(item)}</section>`).join('')||`<div class="empty-bank"><i class="fa-solid fa-box-archive"></i><div>No ${activeEvidenceFilter==='all'?'evidence':activeEvidenceFilter} yet.</div></div>`}</div>`;
 }
 function showTaskDetail(task){
   const isDom=state.currentRole==='dom', isSub=!isDom;
@@ -2227,3 +2255,10 @@ function enhancedInitialize(){
 
 /* Override window.onload — runs after everything in the page is ready */
 window.onload=enhancedInitialize;
+
+/* Jacob's installed-app surface never exposes desktop-style selection or clipboard actions. */
+['copy','cut','paste','contextmenu','selectstart','dragstart'].forEach(type=>{
+  document.addEventListener(type,event=>{
+    if(document.body.classList.contains('sub-role')) event.preventDefault();
+  },true);
+});

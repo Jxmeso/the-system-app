@@ -1,9 +1,12 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
 /* ===== THE SYSTEM v5 — DESIGN TOKENS ===== */
 :root{color-scheme:dark;--bg:#070707;--surface:#151515;--surface-2:#202020;--surface-3:#2a2a2a;--border:#303030;--ivory:#f2efe8;--stone:#9b9890;--muted:#6e6b64;--red:#8f1118;--red-2:#5e0b11;--sage:#8faf97;--sage-2:#4c7a5e;--blue:#315b7a;--blue-2:#213d54;--gold:#c6a642;--rose:#d97c8a}
 
 /* ===== GLOBAL RESET ===== */
-html,body{background:var(--bg)!important;color:var(--ivory)!important;overscroll-behavior-y:none;-webkit-tap-highlight-color:transparent}
-body{font-family:Inter,system-ui,sans-serif;background:radial-gradient(circle at 15% 0%,rgba(49,91,122,.18),transparent 34%),radial-gradient(circle at 100% 12%,rgba(143,17,24,.12),transparent 30%),var(--bg)!important}
+html,body{background:var(--bg)!important;color:var(--ivory)!important;overscroll-behavior-y:none;-webkit-tap-highlight-color:transparent;scrollbar-width:none}
+html::-webkit-scrollbar,body::-webkit-scrollbar,*::-webkit-scrollbar{display:none!important;width:0!important;height:0!important}
+body{font-family:Manrope,system-ui,sans-serif;background:radial-gradient(circle at 15% 0%,rgba(49,91,122,.18),transparent 34%),radial-gradient(circle at 100% 12%,rgba(143,17,24,.12),transparent 30%),var(--bg)!important;-webkit-font-smoothing:antialiased}
+body.sub-role,body.sub-role *{-webkit-user-select:none!important;user-select:none!important;-webkit-touch-callout:none!important}
 
 /* ===== KILL OLD CONFLICTING STYLES ===== */
 /* Override old pill nav-active */
@@ -21,8 +24,8 @@ body{font-family:Inter,system-ui,sans-serif;background:radial-gradient(circle at
 .install-guide{background:none!important}
 
 /* ===== TYPOGRAPHY ===== */
-.heading-serif{font-family:'Playfair Display',Georgia,serif!important;font-weight:700;letter-spacing:-.035em}
-.section-header{font-size:1.35rem;letter-spacing:-.03em;font-weight:650}
+.heading-serif{font-family:Manrope,system-ui,sans-serif!important;font-weight:750;letter-spacing:-.04em}
+.section-header{font-size:1.35rem;line-height:1.2;letter-spacing:-.025em;font-weight:700}
 
 /* ===== HEADER ===== */
 .app-header{position:fixed;top:0;left:0;right:0;transform:translateZ(0)}
@@ -45,6 +48,10 @@ button{touch-action:manipulation}
 
 /* ===== NAV ===== */
 .nav-icon{width:2.35rem;height:2.35rem;border-radius:1rem;border:1px solid transparent;display:flex;align-items:center;justify-content:center;margin:0 auto .2rem}
+.evidence-media{display:block;background:#030303;border:1px solid rgba(198,166,66,.2);border-radius:1.15rem;overflow:hidden}
+.evidence-media video,.evidence-media img{display:block;width:100%;max-height:68vh;object-fit:contain}
+.empty-bank{padding:3rem 1rem;text-align:center;border:1px dashed rgba(198,166,66,.3);border-radius:1.5rem;color:rgba(198,166,66,.6)}
+.empty-bank i{display:block;font-size:2rem;margin-bottom:.7rem;opacity:.55}
 
 /* ===== PILLS & TILES ===== */
 .pill{border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);border-radius:999px}
@@ -132,12 +139,12 @@ button{touch-action:manipulation}
 @keyframes capPop{0%{transform:scale(.4);opacity:0}40%{transform:scale(1.1);opacity:1}100%{transform:scale(1)}}
 #cap-flash.cap-flash-on{box-shadow:inset 0 0 70px 26px rgba(207,51,60,.85);animation:capFlash .55s ease-in-out infinite}
 @keyframes capFlash{0%,100%{box-shadow:inset 0 0 50px 14px rgba(207,51,60,.5)}50%{box-shadow:inset 0 0 90px 34px rgba(207,51,60,.95)}}
-.cap-thanks{font-family:'Playfair Display',Georgia,serif;font-size:2.4rem;font-weight:700;color:var(--ivory);text-align:center;animation:capThanks .6s ease;text-shadow:0 0 30px rgba(207,51,60,.5)}
+.cap-thanks{font-family:Manrope,system-ui,sans-serif;font-size:2.4rem;font-weight:700;color:var(--ivory);text-align:center;animation:capThanks .6s ease;text-shadow:0 0 30px rgba(207,51,60,.5)}
 @keyframes capThanks{0%{opacity:0;transform:scale(.85)}100%{opacity:1;transform:scale(1)}}
-.cap-praise{font-family:'Playfair Display',Georgia,serif;font-size:1.35rem;font-weight:600;color:var(--rose);text-align:center;margin-top:.85rem;max-width:20rem;line-height:1.25;animation:capThanks .8s ease .2s both}
+.cap-praise{font-family:Manrope,system-ui,sans-serif;font-size:1.35rem;font-weight:700;color:var(--rose);text-align:center;margin-top:.85rem;max-width:20rem;line-height:1.25;animation:capThanks .8s ease .2s both}
 #cap-flash.cap-flash-blue{box-shadow:inset 0 0 80px 30px rgba(49,91,122,.9);animation:capFlashBlue .5s ease-in-out infinite}
 @keyframes capFlashBlue{0%,100%{box-shadow:inset 0 0 50px 16px rgba(49,91,122,.6)}50%{box-shadow:inset 0 0 95px 38px rgba(63,120,166,1)}}
-.cap-surprise{font-family:'Playfair Display',Georgia,serif;font-size:1.8rem;font-weight:700;color:#cfe3f5;text-align:center;max-width:20rem;text-shadow:0 0 26px rgba(49,91,122,.8);animation:capThanks .5s ease}
+.cap-surprise{font-family:Manrope,system-ui,sans-serif;font-size:1.8rem;font-weight:700;color:#cfe3f5;text-align:center;max-width:20rem;text-shadow:0 0 26px rgba(49,91,122,.8);animation:capThanks .5s ease}
 
 /* ===== VOICE WAVE ===== */
 .voice-wave{display:flex;align-items:center;justify-content:center;gap:.3rem;height:3rem;--vc:var(--blue)}
