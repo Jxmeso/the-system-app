@@ -15,16 +15,29 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Playfair+Display:wght@700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap');
         
-        body { font-family: 'Inter', system_ui, sans-serif; overscroll-behavior-y: none; }
+        :root { --gold:#d4af37; --red:#8b0000; --cream:#f4efe6; }
+        html { scrollbar-width: none; }
+        html::-webkit-scrollbar, body::-webkit-scrollbar, *::-webkit-scrollbar { display: none; width: 0; height: 0; }
+        body { font-family: 'Manrope', system-ui, sans-serif; overscroll-behavior-y: none; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+        body.sub-mode, body.sub-mode * { -webkit-user-select: none !important; user-select: none !important; -webkit-touch-callout: none !important; }
+        button, .nav-item, [onclick] { touch-action: manipulation; }
+        input, textarea, select { font: inherit; }
         .app-header { position: fixed; top: 0; left: 0; right: 0; transform: translateZ(0); }
-        .heading-serif { font-family: 'Playfair Display', Georgia, serif; font-weight: 700; letter-spacing: -0.02em; }
+        .heading-serif { font-family: 'Manrope', system-ui, sans-serif; font-weight: 700; letter-spacing: -0.035em; }
 
         .elegant-dark { background-color: #0f0f0f; color: #f1e9d9; }
         .glass { background: rgba(255,255,255,0.06); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.1); }
         
-        .section-header { font-size: 1.35rem; letter-spacing: -0.03em; font-weight: 600; }
+        .section-header { font-size: 1.35rem; line-height: 1.2; letter-spacing: -0.025em; font-weight: 700; }
+        .app-bottom-nav { padding-bottom: env(safe-area-inset-bottom); }
+        .media-frame { background:#050505; border:1px solid rgba(212,175,55,.2); overflow:hidden; border-radius:1rem; }
+        .media-frame video, .media-frame img { width:100%; max-height:65vh; object-fit:contain; display:block; }
+        .filter-active { background:var(--gold); color:#111; }
+        .body-zone { fill:rgba(255,255,255,.07); stroke:rgba(212,175,55,.75); stroke-width:2; transition:.2s ease; cursor:pointer; }
+        .body-zone:hover, .body-zone:focus { fill:rgba(212,175,55,.28); }
+        .empty-state { border:1px dashed rgba(212,175,55,.28); background:rgba(255,255,255,.025); }
         
         .nav-active { background-color: #8B0000; color: white; border-radius: 9999px; }
 
@@ -74,7 +87,7 @@
                     <i class="fa-solid fa-infinity text-white text-5xl"></i>
                 </div>
                 <h1 class="text-6xl font-bold heading-serif tracking-tighter">The System</h1>
-                <p class="text-[#d4af37] mt-1 text-xl tracking-[3px] font-light">A WHOLE NEW DYNAMIC TEST 123</p>
+                <p class="text-[#d4af37] mt-2 text-sm tracking-[4px] font-semibold">STRUCTURE · SERVICE · GROWTH</p>
             </div>
 
             <div class="glass rounded-3xl p-8 shadow-2xl">
@@ -91,9 +104,6 @@
                 </button>
             </div>
             
-            <div class="text-center mt-6">
-                <button onclick="showInstallGuide()" class="text-xs text-[#d4af37]/70 hover:text-[#d4af37] underline">How to install as a real app →</button>
-            </div>
         </div>
     </div>
 
@@ -152,16 +162,12 @@
                 </div>
 
                 <!-- Quick Stats -->
-                <div class="grid grid-cols-3 gap-3 mb-8">
-                    <div class="glass rounded-3xl p-4">
+                <div class="grid grid-cols-2 gap-3 mb-8">
+                    <div onclick="navigateToTab('tasks')" class="glass rounded-3xl p-4 cursor-pointer dynamic-card">
                         <div class="text-xs text-[#d4af37]/70 tracking-wider">TASKS TODAY</div>
                         <div class="flex items-baseline gap-x-2 mt-1"><span id="dash-tasks-done" class="text-4xl font-semibold">0</span><span class="text-[#d4af37]/50">/<span id="dash-tasks-total">0</span></span></div>
                     </div>
-                    <div class="glass rounded-3xl p-4">
-                        <div class="text-xs text-[#d4af37]/70 tracking-wider">JOURNAL STREAK</div>
-                        <div class="flex items-baseline gap-x-2 mt-1"><span id="dash-journal-streak" class="text-4xl font-semibold">0</span><span class="text-emerald-400 text-sm">days</span></div>
-                    </div>
-                    <div class="glass rounded-3xl p-4">
+                    <div onclick="navigateToTab('punishments')" class="glass rounded-3xl p-4 cursor-pointer dynamic-card">
                         <div class="text-xs text-[#d4af37]/70 tracking-wider">ACTIVE PUNISHMENTS</div>
                         <div class="mt-1"><span id="dash-active-punish" class="text-4xl font-semibold">0</span></div>
                     </div>
@@ -171,7 +177,7 @@
                 <div class="mb-8">
                     <div class="flex items-center justify-between mb-3 px-1">
                         <span class="font-semibold">Recent Activity</span>
-                        <span onclick="navigateToTab('evidence')" class="text-xs text-[#d4af37] cursor-pointer hover:underline">View All →</span>
+                        <span onclick="navigateToTab(state.currentRole === 'dom' ? 'evidence' : 'tasks')" class="text-xs text-[#d4af37] cursor-pointer hover:underline">View All →</span>
                     </div>
                     <div id="activity-feed" class="space-y-2"></div>
                 </div>
@@ -226,17 +232,6 @@
                 </div>
             </div>
 
-            <!-- JOURNAL -->
-            <div id="tab-journal" class="tab-content hidden">
-                <div class="flex justify-between items-center mb-5 px-1">
-                    <span class="section-header">Daily Journal</span>
-                    <button onclick="showNewJournalModal()" class="sub-only px-5 py-2 bg-[#8B0000] text-white text-sm rounded-2xl flex items-center gap-x-2">
-                        <i class="fa-solid fa-pen"></i> <span>New Entry</span>
-                    </button>
-                </div>
-                <div id="journal-entries" class="space-y-4"></div>
-            </div>
-
             <!-- LIMITS -->
             <div id="tab-limits" class="tab-content hidden">
                 <div class="flex justify-between mb-4 px-1">
@@ -281,14 +276,34 @@
                     </div>
                     <div id="rules-consequences" class="text-sm leading-relaxed whitespace-pre-line"></div>
                 </div>
+
+                <div class="glass rounded-3xl p-6 mt-5">
+                    <div class="mb-5">
+                        <span class="font-semibold block">Body & Boundaries</span>
+                        <span class="text-xs text-[#d4af37]/65">Tap a body area to review its boundary notes.</span>
+                    </div>
+                    <div class="grid md:grid-cols-[220px_1fr] gap-6 items-center">
+                        <svg viewBox="0 0 220 440" class="w-full max-w-[220px] mx-auto" role="img" aria-label="Male body boundary map">
+                            <circle class="body-zone" tabindex="0" onclick="showBodyArea('Head & face')" cx="110" cy="42" r="29"/>
+                            <path class="body-zone" tabindex="0" onclick="showBodyArea('Chest & torso')" d="M75 82 Q110 65 145 82 L157 202 Q135 224 110 224 Q85 224 63 202Z"/>
+                            <path class="body-zone" tabindex="0" onclick="showBodyArea('Left arm')" d="M72 88 Q53 93 45 123 L24 220 Q27 232 39 227 L66 148Z"/>
+                            <path class="body-zone" tabindex="0" onclick="showBodyArea('Right arm')" d="M148 88 Q167 93 175 123 L196 220 Q193 232 181 227 L154 148Z"/>
+                            <path class="body-zone" tabindex="0" onclick="showBodyArea('Intimate areas')" d="M82 207 Q110 222 138 207 L140 259 Q110 275 80 259Z"/>
+                            <path class="body-zone" tabindex="0" onclick="showBodyArea('Left leg')" d="M80 254 L108 260 L99 410 Q94 429 77 421 L65 409Z"/>
+                            <path class="body-zone" tabindex="0" onclick="showBodyArea('Right leg')" d="M112 260 L140 254 L155 409 Q143 429 126 421 L112 332Z"/>
+                        </svg>
+                        <div id="body-area-detail" class="empty-state rounded-2xl p-5 text-sm text-[#d4af37]/75">Select an area to see sensitive, ticklish, and off-limits notes.</div>
+                    </div>
+                </div>
             </div>
 
             <!-- EVIDENCE VAULT -->
             <div id="tab-evidence" class="tab-content hidden">
-                <div class="flex justify-between mb-5 px-1">
-                    <span class="section-header">Evidence Vault</span>
-                    <button onclick="showAddEvidenceModal()" class="sub-only px-5 py-2 bg-[#8B0000] text-white text-sm rounded-2xl">Submit Evidence</button>
+                <div class="mb-5 px-1">
+                    <span class="section-header block">Evidence Bank</span>
+                    <span class="text-xs text-[#d4af37]/65">Everything Jacob has submitted, organised and ready to review.</span>
                 </div>
+                <div id="evidence-filters" class="flex gap-2 overflow-x-auto pb-3 mb-2"></div>
                 <div id="evidence-list" class="space-y-3"></div>
             </div>
 
@@ -296,13 +311,13 @@
     </div>
 
     <!-- Bottom Navigation -->
-    <div class="fixed bottom-0 left-0 right-0 z-50 glass border-t border-white/10">
+    <div id="bottom-nav" class="app-bottom-nav hidden fixed bottom-0 left-0 right-0 z-50 glass border-t border-white/10">
         <div class="max-w-3xl mx-auto grid grid-cols-7 text-center text-xs">
             <div onclick="navigateToTab('dashboard')" class="nav-item py-3 cursor-pointer" data-tab="dashboard"><i class="fa-solid fa-home text-lg mb-0.5"></i><div class="text-[10px]">Home</div></div>
             <div onclick="navigateToTab('tasks')" class="nav-item py-3 cursor-pointer" data-tab="tasks"><i class="fa-solid fa-tasks text-lg mb-0.5"></i><div class="text-[10px]">Tasks</div></div>
             <div onclick="navigateToTab('punishments')" class="nav-item py-3 cursor-pointer" data-tab="punishments"><i class="fa-solid fa-gavel text-lg mb-0.5"></i><div class="text-[10px]">Punish</div></div>
             <div onclick="navigateToTab('stars')" class="nav-item py-3 cursor-pointer" data-tab="stars"><i class="fa-solid fa-star text-lg mb-0.5"></i><div class="text-[10px]">Stars</div></div>
-            <div onclick="navigateToTab('journal')" class="nav-item py-3 cursor-pointer" data-tab="journal"><i class="fa-solid fa-book text-lg mb-0.5"></i><div class="text-[10px]">Journal</div></div>
+            <div onclick="navigateToTab('evidence')" class="nav-item dom-only py-3 cursor-pointer" data-tab="evidence"><i class="fa-solid fa-photo-film text-lg mb-0.5"></i><div class="text-[10px]">Evidence</div></div>
             <div onclick="navigateToTab('limits')" class="nav-item py-3 cursor-pointer" data-tab="limits"><i class="fa-solid fa-list-check text-lg mb-0.5"></i><div class="text-[10px]">Limits</div></div>
             <div onclick="navigateToTab('rules')" class="nav-item py-3 cursor-pointer" data-tab="rules"><i class="fa-solid fa-scroll text-lg mb-0.5"></i><div class="text-[10px]">Rules</div></div>
         </div>
@@ -330,6 +345,7 @@
         firebase.initializeApp(firebaseConfig);
         const sharedStateDocument = firebase.firestore().collection('systems').doc('shared');
         const evidenceStorage = firebase.storage();
+        evidenceStorage.setMaxUploadRetryTime(30000);
         let firestoreConnected = false;
         let applyingRemoteState = false;
         let knownTaskStatuses = new Map();
@@ -378,7 +394,15 @@
             evidence: [],
             activityLog: [],
             lockedSections: { limits: false },
-            evidenceTypesAllowed: { photo: true, video: true, voice: true, text: true }
+            evidenceTypesAllowed: { photo: true, video: true, voice: true, text: true },
+            bodyAreas: {},
+            celebrationMessages: [
+                "Well done, faggot.",
+                "Good boy. Exactly as instructed.",
+                "That is the standard I expect from you.",
+                "Excellent work. Keep earning it.",
+                "You did well. I noticed."
+            ]
         };
 
         function getSharedState() {
@@ -398,6 +422,11 @@
         function loadState() {
             const saved = localStorage.getItem('the_system_v4');
             if (saved) state = { ...state, ...JSON.parse(saved) };
+            if (!Array.isArray(state.evidence)) state.evidence = [];
+            const indexedTaskIds = new Set(state.evidence.map(item => item.taskId));
+            state.tasks.filter(task => (task.evidence || []).length && !indexedTaskIds.has(task.id)).forEach(task => {
+                state.evidence.push({ id: `task-${task.id}`, taskId: task.id, title: task.title, date: task.completedDate || task.assigned, items: task.evidence });
+            });
         }
 
         function connectFirestore() {
@@ -491,11 +520,15 @@
             const isDom = state.currentRole === 'dom';
             document.querySelectorAll('.dom-only').forEach(el => el.style.display = isDom ? '' : 'none');
             document.querySelectorAll('.sub-only').forEach(el => el.style.display = isDom ? 'none' : '');
+            document.body.classList.toggle('sub-mode', !isDom);
+            const navGrid = document.querySelector('#bottom-nav > div');
+            if (navGrid) navGrid.className = `max-w-3xl mx-auto grid ${isDom ? 'grid-cols-7' : 'grid-cols-6'} text-center text-xs`;
             updateHeader();
         }
 
         function switchRole() {
             document.getElementById('main-app').classList.add('hidden');
+            document.getElementById('bottom-nav').classList.add('hidden');
             document.getElementById('login-screen').classList.remove('hidden');
             document.getElementById('passcode-input').value = '';
             document.getElementById('login-error').classList.add('hidden');
@@ -503,6 +536,9 @@
         }
 
         function navigateToTab(tab) {
+            if (tab === 'evidence' && state.currentRole !== 'dom') tab = 'dashboard';
+            const target = document.getElementById(`tab-${tab}`);
+            if (!target) tab = 'dashboard';
             document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
             document.getElementById(`tab-${tab}`).classList.remove('hidden');
             document.querySelectorAll('.nav-item').forEach(el => {
@@ -510,6 +546,7 @@
                 if (el.dataset.tab === tab) el.classList.add('text-[#8B0000]', 'font-semibold');
             });
             renderCurrentTab();
+            window.scrollTo({ top: 0, behavior: 'instant' });
         }
 
         function renderCurrentTab() {
@@ -521,7 +558,6 @@
                 case 'tasks': renderTasks(); break;
                 case 'punishments': renderPunishments(); break;
                 case 'stars': renderStarChart(); break;
-                case 'journal': renderJournal(); break;
                 case 'limits': renderLimits(); break;
                 case 'rules': renderRules(); break;
                 case 'evidence': renderEvidence(); break;
@@ -537,6 +573,12 @@
 
         function formatUKTime(value = new Date()) {
             return new Date(value).toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true });
+        }
+
+        function escapeHTML(value = '') {
+            const node = document.createElement('div');
+            node.textContent = String(value);
+            return node.innerHTML;
         }
 
         function calculateJournalStreak() {
@@ -565,7 +607,6 @@
             document.getElementById('dash-star-count').textContent = state.stars;
             document.getElementById('dash-tasks-done').textContent = state.tasks.filter(task => task.status === 'completed').length;
             document.getElementById('dash-tasks-total').textContent = state.tasks.length;
-            document.getElementById('dash-journal-streak').textContent = calculateJournalStreak();
             document.getElementById('dash-active-punish').textContent = state.punishments.filter(punishment => punishment.status === 'active').length;
 
             checkActivePunishmentBanner();
@@ -690,16 +731,21 @@
                 return `<label class="block"><span class="text-xs text-[#d4af37]/70">TEXT REPORT</span><textarea id="evidence-text" rows="4" class="beautiful-input w-full px-4 py-3 rounded-2xl mt-1" placeholder="Write your report..."></textarea></label>`;
             }
             if (!config) return '';
-            return `<label class="block"><span class="text-xs text-[#d4af37]/70">${config.label.toUpperCase()}</span><input id="evidence-${type}" type="file" accept="${config.accept}" ${config.capture ? `capture="${config.capture}"` : ''} class="beautiful-input w-full px-4 py-3 rounded-2xl mt-1 text-sm"></label>`;
+            return `<label class="block"><span class="text-xs text-[#d4af37]/70">${config.label.toUpperCase()}${type === 'video' ? ' · you can include an extra clip' : ''}</span><input id="evidence-${type}" type="file" accept="${config.accept}" ${config.capture ? `capture="${config.capture}"` : ''} ${type === 'video' || type === 'photo' ? 'multiple' : ''} class="beautiful-input w-full px-4 py-3 rounded-2xl mt-1 text-sm"></label>`;
         }
 
         function renderSubmittedEvidence(task) {
             const items = task.evidence || [];
             if (!items.length) return '<div class="text-sm opacity-60">No evidence submitted.</div>';
-            return items.map(item => item.type === 'text'
-                ? `<div class="glass rounded-2xl p-4"><div class="text-xs text-[#d4af37]/70 mb-1">TEXT REPORT</div><div class="text-sm whitespace-pre-wrap">${item.value}</div></div>`
-                : `<a href="${item.url}" target="_blank" rel="noopener" class="glass rounded-2xl p-4 flex items-center justify-between"><span><i class="fa-solid fa-paperclip mr-2"></i>${item.name}</span><i class="fa-solid fa-arrow-up-right-from-square text-[#d4af37]"></i></a>`
-            ).join('');
+            return items.map(renderEvidenceItem).join('');
+        }
+
+        function renderEvidenceItem(item) {
+            if (item.type === 'text') return `<div class="glass rounded-2xl p-4"><div class="text-xs text-[#d4af37]/70 mb-1">TEXT</div><div class="text-sm whitespace-pre-wrap">${escapeHTML(item.value)}</div></div>`;
+            if (item.type === 'video') return `<div class="media-frame"><video controls playsinline preload="metadata" src="${item.url}"></video><div class="px-4 py-3 text-xs text-[#d4af37]/75"><i class="fa-solid fa-video mr-2"></i>${escapeHTML(item.name || 'Submitted video')}</div></div>`;
+            if (item.type === 'photo') return `<button onclick="showEvidenceViewer('${encodeURIComponent(item.url)}','photo','${encodeURIComponent(item.name || 'Submitted photo')}')" class="media-frame block w-full text-left"><img loading="lazy" src="${item.url}" alt="${escapeHTML(item.name || 'Submitted photo')}"><span class="block px-4 py-3 text-xs text-[#d4af37]/75"><i class="fa-solid fa-image mr-2"></i>${escapeHTML(item.name || 'Submitted photo')}</span></button>`;
+            if (item.type === 'voice') return `<div class="glass rounded-2xl p-4"><div class="text-xs text-[#d4af37]/70 mb-2">VOICE NOTE</div><audio controls preload="metadata" class="w-full" src="${item.url}"></audio></div>`;
+            return `<a href="${item.url}" target="_blank" rel="noopener" class="glass rounded-2xl p-4 flex items-center justify-between"><span><i class="fa-solid fa-paperclip mr-2"></i>${escapeHTML(item.name || 'Attachment')}</span><i class="fa-solid fa-arrow-up-right-from-square text-[#d4af37]"></i></a>`;
         }
 
         function showTaskDetail(task) {
@@ -732,32 +778,75 @@
 
             const fileTypes = ['photo', 'video', 'voice', 'file'];
             for (const type of fileTypes) {
-                const file = document.getElementById(`evidence-${type}`)?.files?.[0];
-                if (required.includes(type) && !file) return alert(`Please add the required ${type} evidence.`);
+                const files = document.getElementById(`evidence-${type}`)?.files;
+                if (required.includes(type) && !files?.length) return alert(`Please add the required ${type} evidence.`);
             }
 
             button.disabled = true;
-            button.textContent = 'Uploading evidence…';
+            button.textContent = 'Checking upload service…';
             try {
+                const hasFileEvidence = fileTypes.some(type => document.getElementById(`evidence-${type}`)?.files?.length);
+                if (hasFileEvidence) {
+                    const storageCheck = await fetch(`https://firebasestorage.googleapis.com/v0/b/${firebaseConfig.storageBucket}/o?maxResults=1&t=${Date.now()}`, { cache: 'no-store' });
+                    if (storageCheck.status === 404) throw new Error('STORAGE_NOT_CONFIGURED');
+                }
                 for (const type of fileTypes) {
-                    const file = document.getElementById(`evidence-${type}`)?.files?.[0];
-                    if (!file) continue;
-                    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-                    const reference = evidenceStorage.ref(`evidence/${task.id}/${Date.now()}-${safeName}`);
-                    await reference.put(file, { contentType: file.type });
-                    evidence.push({ type, name: file.name, url: await reference.getDownloadURL(), size: file.size });
+                    const files = Array.from(document.getElementById(`evidence-${type}`)?.files || []);
+                    for (const file of files) {
+                        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+                        const reference = evidenceStorage.ref(`evidence/${task.id}/${Date.now()}-${safeName}`);
+                        const url = await uploadEvidenceFile(reference, file, button);
+                        evidence.push({ type, name: file.name, url, size: file.size, contentType: file.type });
+                    }
                 }
                 task.evidence = evidence;
                 task.report = textValue || '';
                 state.evidence.unshift({ id: Date.now(), taskId: task.id, title: task.title, date: new Date().toISOString(), items: evidence });
+                button.textContent = 'Saving completion…';
+                await completeTask(taskId);
                 button.closest('.fixed').remove();
-                completeTask(taskId);
             } catch (error) {
                 console.error('Evidence upload failed:', error);
-                alert('The evidence could not be uploaded. Check Firebase Storage is enabled, then try again.');
+                const message = error.message === 'STORAGE_NOT_CONFIGURED'
+                    ? 'Firebase Storage has not been created yet. Open Firebase Console → Storage → Get started, then retry.'
+                    : error.code === 'storage/unauthorized'
+                        ? 'Firebase Storage permissions are blocking uploads. Update the Storage rules, then retry.'
+                        : 'The upload failed or stopped responding. Check the connection and try again.';
+                alert(message);
                 button.disabled = false;
                 button.textContent = 'Submit & Complete';
             }
+        }
+
+        function uploadEvidenceFile(reference, file, button) {
+            return new Promise((resolve, reject) => {
+                const upload = reference.put(file, { contentType: file.type });
+                let lastProgressAt = Date.now();
+                let lastBytes = 0;
+                const stalledUpload = setInterval(() => {
+                    if (Date.now() - lastProgressAt > 30000) {
+                        upload.cancel();
+                        clearInterval(stalledUpload);
+                        reject(new Error('UPLOAD_STALLED'));
+                    }
+                }, 3000);
+
+                upload.on('state_changed', snapshot => {
+                    if (snapshot.bytesTransferred > lastBytes) {
+                        lastBytes = snapshot.bytesTransferred;
+                        lastProgressAt = Date.now();
+                    }
+                    const percent = snapshot.totalBytes ? Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100) : 0;
+                    button.textContent = `Uploading ${file.name} · ${percent}%`;
+                }, error => {
+                    clearInterval(stalledUpload);
+                    reject(error);
+                }, async () => {
+                    clearInterval(stalledUpload);
+                    try { resolve(await reference.getDownloadURL()); }
+                    catch (error) { reject(error); }
+                });
+            });
         }
 
         function showAddTaskModal() {
@@ -848,9 +937,10 @@
             showConfetti(30);
         }
 
-        function completeTask(taskId) {
+        async function completeTask(taskId) {
             const task = state.tasks.find(t => t.id === taskId);
             if (!task) return;
+            const previousState = JSON.stringify(state);
             task.status = "completed";
             task.completedDate = new Date().toISOString().split('T')[0];
             
@@ -858,9 +948,18 @@
             state.stars += starsEarned;
             state.starLog.unshift({id: Date.now(), date: task.completedDate, reason: `Completed: ${task.title}`, amount: starsEarned});
             
-            logActivity('sub', `Completed task: ${task.title}`);
-            
-            saveState();
+            const time = formatUKTime();
+            state.activityLog.unshift({ id: Date.now(), type: 'sub', message: `Completed task: ${task.title}`, time });
+            if (state.activityLog.length > 40) state.activityLog.pop();
+
+            localStorage.setItem('the_system_v4', JSON.stringify(state));
+            try {
+                await sharedStateDocument.set(getSharedState());
+            } catch (error) {
+                state = JSON.parse(previousState);
+                localStorage.setItem('the_system_v4', previousState);
+                throw error;
+            }
             showConfetti(50);
             
             // Big celebration for sub
@@ -884,6 +983,8 @@
 
         // ==================== STAR CELEBRATION ====================
         function showStarCelebration(amount, reason) {
+            const messages = state.celebrationMessages?.length ? state.celebrationMessages : ["Well done."];
+            const message = messages[Math.floor(Math.random() * messages.length)];
             const modal = document.createElement('div');
             modal.innerHTML = `
                 <div class="fixed inset-0 bg-black/95 z-[200] flex items-center justify-center p-6" onclick="this.remove()">
@@ -892,10 +993,10 @@
                         <div class="text-4xl font-bold text-[#d4af37] mb-2">+${amount} Stars</div>
                         <div class="text-xl mb-6">${reason}</div>
                         
-                        <div class="text-sm text-[#d4af37]/80 mb-8">Keep going. I'm proud of you.</div>
+                        <div class="text-base text-[#d4af37] font-semibold mb-8">${escapeHTML(message)}</div>
                         
                         <button onclick="this.closest('.fixed').remove(); showConfetti(80)" 
-                                class="w-full py-4 bg-[#8B0000] text-white rounded-2xl font-semibold">Thank you, Sir</button>
+                                class="w-full py-4 bg-[#8B0000] text-white rounded-2xl font-semibold">Done</button>
                     </div>
                 </div>
             `;
@@ -981,6 +1082,8 @@
             activeContainer.innerHTML = '';
             const active = state.punishments.filter(p => p.status === 'active');
 
+            if (!active.length) activeContainer.innerHTML = `<div class="empty-state rounded-3xl p-6 text-center text-sm text-[#d4af37]/65">No active consequences.</div>`;
+
             active.forEach(p => {
                 const time = getTimeLeft(p.due);
                 const div = document.createElement('div');
@@ -997,6 +1100,9 @@
                 `;
                 activeContainer.appendChild(div);
             });
+            const history = document.getElementById('punishments-history');
+            const completed = state.punishments.filter(p => p.status === 'completed');
+            history.innerHTML = completed.length ? completed.map(p => `<div class="glass rounded-2xl p-4"><div class="font-semibold">${escapeHTML(p.title)}</div><div class="text-xs text-[#d4af37]/65 mt-1">Served · ${formatUKDate(p.due)}</div></div>`).join('') : `<div class="text-[#d4af37]/50 px-1">No completed consequences.</div>`;
         }
 
         function completePunishmentAsSub(punishId, btn) {
@@ -1052,26 +1158,52 @@
         }
 
         function renderRules() {
-            document.getElementById('rules-house').innerHTML = state.rules.houseRules.replace(/\n/g, '<br>') || 'No house rules set.';
-            document.getElementById('rules-protocols').innerHTML = state.rules.protocols.replace(/\n/g, '<br>') || 'No protocols set.';
-            document.getElementById('rules-arrival').innerHTML = state.rules.arrivalProcedure.replace(/\n/g, '<br>') || 'No arrival procedure set.';
-            document.getElementById('rules-consequences').innerHTML = state.rules.consequences.replace(/\n/g, '<br>') || 'No consequences defined.';
+            const rules = state.rules || {};
+            document.getElementById('rules-house').innerHTML = (rules.houseRules || '').replace(/\n/g, '<br>') || 'No house rules set.';
+            document.getElementById('rules-protocols').innerHTML = (rules.protocols || '').replace(/\n/g, '<br>') || 'No protocols set.';
+            document.getElementById('rules-arrival').innerHTML = (rules.arrivalProcedure || '').replace(/\n/g, '<br>') || 'No arrival procedure set.';
+            document.getElementById('rules-consequences').innerHTML = (rules.consequences || '').replace(/\n/g, '<br>') || 'No consequences defined.';
         }
 
-        function renderEvidence() {
+        function showBodyArea(area) {
+            const notes = state.bodyAreas?.[area];
+            document.getElementById('body-area-detail').innerHTML = `<div class="text-xs tracking-wider text-[#d4af37] mb-2">${escapeHTML(area).toUpperCase()}</div><div class="text-sm text-[#f4efe6]">${notes ? escapeHTML(notes) : 'No boundary notes have been added for this area yet.'}</div>`;
+        }
+
+        let activeEvidenceFilter = 'all';
+
+        function renderEvidence(filter = activeEvidenceFilter) {
+            if (state.currentRole !== 'dom') return navigateToTab('dashboard');
+            activeEvidenceFilter = filter;
             const container = document.getElementById('evidence-list');
             container.innerHTML = '';
-            if (state.evidence.length === 0) {
-                container.innerHTML = `<div class="text-center py-6 text-sm text-[#d4af37]/60">No evidence submitted yet.</div>`;
+            const allItems = state.evidence.flatMap(record => (record.items || []).map((item, index) => ({ ...item, record, index })));
+            const filters = [
+                ['all','All','fa-layer-group'], ['video','Videos','fa-video'], ['photo','Photos','fa-image'],
+                ['text','Text','fa-align-left'], ['voice','Voice','fa-microphone'], ['file','Files','fa-paperclip']
+            ];
+            document.getElementById('evidence-filters').innerHTML = filters.map(([key,label,icon]) => `<button onclick="renderEvidence('${key}')" class="flex-shrink-0 px-4 py-2 rounded-full text-xs font-semibold ${filter === key ? 'filter-active' : 'glass'}"><i class="fa-solid ${icon} mr-1.5"></i>${label} <span class="opacity-60">${key === 'all' ? allItems.length : allItems.filter(entry => entry.type === key).length}</span></button>`).join('');
+            const visible = filter === 'all' ? allItems : allItems.filter(entry => entry.type === filter);
+            if (!visible.length) {
+                container.innerHTML = `<div class="empty-state rounded-3xl text-center py-12 px-6"><i class="fa-solid fa-box-archive text-3xl text-[#d4af37]/35 mb-3"></i><div class="font-semibold">No ${filter === 'all' ? 'evidence' : filter} yet</div><div class="text-sm text-[#d4af37]/55 mt-1">Submitted items will appear here automatically.</div></div>`;
                 return;
             }
-            state.evidence.forEach(ev => {
+            visible.forEach(entry => {
                 const div = document.createElement('div');
-                div.className = 'glass rounded-3xl p-4 cursor-pointer dynamic-card';
-                div.innerHTML = `<div class="font-medium">${ev.title}</div><div class="text-xs text-[#d4af37]/70">${formatUKDate(ev.date)} at ${formatUKTime(ev.date)}</div><div class="text-xs text-emerald-400 mt-2">${(ev.items || []).length} item${(ev.items || []).length === 1 ? '' : 's'} submitted · Tap to view</div>`;
-                div.onclick = () => showTaskDetailById(ev.taskId);
+                div.className = 'space-y-2';
+                div.innerHTML = `<div class="flex justify-between items-end px-1"><div><div class="font-semibold">${escapeHTML(entry.record.title)}</div><div class="text-xs text-[#d4af37]/60">${formatUKDate(entry.record.date)} · ${formatUKTime(entry.record.date)}</div></div><span class="text-[10px] uppercase tracking-wider text-[#d4af37]/60">${entry.type}</span></div>${renderEvidenceItem(entry)}`;
                 container.appendChild(div);
             });
+        }
+
+        function showEvidenceViewer(encodedUrl, type, encodedName) {
+            if (state.currentRole !== 'dom') return;
+            const url = decodeURIComponent(encodedUrl);
+            const name = decodeURIComponent(encodedName);
+            const media = type === 'photo' ? `<img src="${url}" alt="${escapeHTML(name)}" class="max-w-full max-h-[80vh] object-contain">` : `<video src="${url}" controls playsinline autoplay class="max-w-full max-h-[80vh]"></video>`;
+            const modal = document.createElement('div');
+            modal.innerHTML = `<div class="fixed inset-0 bg-black/95 z-[250] flex flex-col items-center justify-center p-4" onclick="this.remove()"><button class="absolute top-5 right-5 w-11 h-11 rounded-full glass text-2xl" aria-label="Close">×</button><div onclick="event.stopImmediatePropagation()" class="w-full max-w-3xl">${media}<div class="text-center text-sm text-[#d4af37] mt-3">${escapeHTML(name)}</div></div></div>`;
+            document.getElementById('modal-container').appendChild(modal);
         }
 
         function showSettings() {
@@ -1145,6 +1277,7 @@
                 }
                 document.getElementById('login-screen').classList.add('hidden');
                 document.getElementById('main-app').classList.remove('hidden');
+                document.getElementById('bottom-nav').classList.remove('hidden');
                 document.getElementById('login-error').classList.add('hidden');
                 updateRoleUI();
                 navigateToTab('dashboard');
@@ -1184,16 +1317,13 @@
             updateRoleUI();
             navigateToTab('dashboard');
             
-            // First-time install hint for sub
-            if (state.currentRole === 'sub' && !localStorage.getItem('install_hint_v4')) {
-                setTimeout(() => {
-                    if (confirm("Would you like to install The System on your Home Screen so it feels like a real app?")) {
-                        showInstallGuide();
-                    }
-                    localStorage.setItem('install_hint_v4', 'true');
-                }, 5000);
-            }
         }
+
+        ['copy', 'cut', 'paste', 'contextmenu', 'selectstart', 'dragstart'].forEach(eventName => {
+            document.addEventListener(eventName, event => {
+                if (state.currentRole === 'sub' && !document.getElementById('main-app').classList.contains('hidden')) event.preventDefault();
+            });
+        });
 
         window.onload = initializeApp;
     </script>
