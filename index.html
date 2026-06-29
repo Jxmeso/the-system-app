@@ -336,6 +336,18 @@
         const evidenceStorage = firebase.storage();
         evidenceStorage.setMaxUploadRetryTime(30000);
         const pushMessaging = firebase.messaging.isSupported() ? firebase.messaging() : null;
+        const systemWorkerRegistrationPromise = 'serviceWorker' in navigator
+            ? navigator.serviceWorker.register('./firebase-messaging-sw.js', {
+                scope: './',
+                updateViaCache: 'none'
+            }).then(registration => {
+                registration.update().catch(error => console.warn('Service worker update check failed', error));
+                return registration;
+            }).catch(error => {
+                console.warn('Service worker registration failed', error);
+                return null;
+            })
+            : Promise.resolve(null);
         let firestoreConnected = false;
         let applyingRemoteState = false;
         let knownTaskStatuses = new Map();
@@ -390,7 +402,8 @@
         async function enablePushNotifications() {
             if (!pushMessaging || !('serviceWorker' in navigator) || !('Notification' in window)) return;
             try {
-                const registration = await navigator.serviceWorker.register('./firebase-messaging-sw.js', { scope: './' });
+                const registration = await systemWorkerRegistrationPromise;
+                if (!registration) return;
                 const permission = Notification.permission === 'granted'
                     ? 'granted'
                     : await Notification.requestPermission();
