@@ -6,7 +6,7 @@
 
 /* ── Version gate: forces one clean navigation when new build detected ── */
 (function(){
-  var BUILD='v5-20260629-01';
+  var BUILD='v5-20260629-white-screen-recovery-1';
   try{
     if(localStorage.getItem('_sys_build')!==BUILD){
       try{localStorage.setItem('_sys_build',BUILD);}catch(_){}

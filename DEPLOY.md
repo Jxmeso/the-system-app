@@ -1,5 +1,9 @@
 # The System — Backend Deployment Guide
 
+For GitHub Pages and installed-PWA releases, follow
+[`PWA_WHITE_SCREEN_RUNBOOK.md`](PWA_WHITE_SCREEN_RUNBOOK.md). A merge is not a
+successful release until the Pages workflow and public app URL are verified.
+
 This app is a **static GitHub Pages PWA** with **client-side Firebase**. Everything
 in `app-enhancements.js` runs in the browser. The files in this folder are the
 **server-side backend** that Claude authored but **cannot deploy for you** —
