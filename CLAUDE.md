@@ -1,29 +1,104 @@
 # CLAUDE.md — The System App
 
-**Strict Boundaries (Permanent — do not override without explicit written consent from owner)**
-
-- **Absolutely forbidden** without explicit written consent:
-  - Any changes to notifications, messaging, Firebase Cloud Messaging, push notifications, service worker (firebase-messaging-sw.js), Cloud Functions for notifications, or anything related.
-  - Any changes to pull-to-refresh, home screen refresh, iOS PWA update behavior, visibilitychange update checks, or app refresh logic.
-
-These rules are hard and permanent. Only the owner can add consent in writing (message or update to this file).
+**Strict Boundaries (Permanent)**
+- Absolutely no changes to notifications, messaging, push, service worker, Cloud Functions for notifications, pull-to-refresh, or home screen updates without explicit written consent.
 
 ---
 
-## Approved Change Plan (Executed June 2026)
+## New Filthy Ranking Scales (June 2026)
 
-This document logs all changes made under the approved plan.
+### Difficulty Scale (Escalating Filth)
+- **Fingering** = Very easy, minimal code
+- **Plug** = Easy
+- **Tunnel Plug** = Medium
+- **Fist** = Hard but doable
+- **Fist Punching** = Extra Large / complex
 
-### Step 0 — Backup & Documentation (Completed)
-- Owner instructed to export full backup via in-app "Export Backup" button before any edits.
-- Current state documented here.
-- All future changes will be logged with date, files changed, and purpose.
-- Rollback: Restore from exported JSON or previous commit.
+### Risk / Impact Scale (Filthy Escalation)
+- **Spit** = Very low risk
+- **Cum** = Low risk
+- **Piss** = Medium risk
+- **Shit** = High risk (use with extreme caution)
 
-**Current commit/SHA at start of work**: (to be noted after first edit)
+These replace or supplement the old piss-lick scales for new work. Use the filthiest appropriate one.
 
 ---
 
-## Changes Log
+## Full Implementation Roadmap (Grouped)
 
-(Changes will be added here as executed — one section per step)
+All work will follow the System Architecture in ARCHITECTURE.md.
+
+### Milestone 1: Capture Flow Overhaul (Highest Priority)
+**Goal**: Make the video/photo/voice ritual locked, teasing, humiliating, and fully controlled by dominant.
+
+**Roadmap Point 1.1** — Bigger camera preview + locked camera facing
+- Files: app-enhancements.js (capture modal)
+- Rationale: Sub cannot change camera; dominant decides front/back.
+- Difficulty: Plug
+- Risk: Spit
+
+**Roadmap Point 1.2** — Pre-capture ritual screen (requirements + pose + delay)
+- Show icons for: Front camera, Face required, Pose (topless/naked/underwear), Blind mode.
+- Add 5-10s setup delay before auto-record.
+- Files: app-enhancements.js + enhancements.css
+- Difficulty: Tunnel Plug
+- Risk: Cum
+
+**Roadmap Point 1.3** — Blind recording toggle + fade
+- Toggle in task creation. Screen fades to black with “You’re doing this blind. Trust the process.”
+- Difficulty: Plug
+- Risk: Spit
+
+**Roadmap Point 1.4** — Face detection with strikes
+- Optional “Face required”. Detect face in frame. Pause + message if lost. 3 strikes = restart.
+- Files: app-enhancements.js (MediaRecorder + canvas analysis)
+- Difficulty: Fist
+- Risk: Piss
+
+**Roadmap Point 1.5** — Timer fuckery + teasing
+- Base time set by dominant. Random extension, colour change, “Whoops… keep going faggot”, fake countdown then real time.
+- Difficulty: Fist
+- Risk: Cum
+
+**Roadmap Point 1.6** — Dramatic post-capture message + auto-lock
+- Bigger, centered, harsh praise/degradation. Auto-submit if complete. Disable redo.
+- Difficulty: Plug
+- Risk: Spit
+
+### Milestone 2: Evidence Submission Locking
+- Strict enforcement: Submit button disabled until all required evidence captured.
+- Clear “Evidence locked & sent” + dramatic message.
+- Difficulty: Tunnel Plug
+- Risk: Cum
+
+### Milestone 3: Punishment Visibility & Custom Notes
+- Top bar shows only active punishments (titles + countdown, cycle or scroll).
+- Small overlay dropdown for custom humiliating note per punishment.
+- Full punishments list view.
+- Difficulty: Plug
+- Risk: Spit
+
+### Milestone 4: Web Version Polish for Dominant
+- Full parity with phone for review/create.
+- Hide sub-only capture tools in browser.
+- Already partially done — polish remaining.
+- Difficulty: Fingering
+- Risk: Spit
+
+### Milestone 5: Documentation & Polish
+- Update ARCHITECTURE.md and CLAUDE.md with every change.
+- Add skeleton loading where missing.
+- Consistent success states.
+- Difficulty: Fingering
+- Risk: Spit
+
+All changes will be made one milestone at a time with backup, testing, and full logging.
+
+---
+
+## Previous Work Logged
+(Previous skeleton, bottom bar, web polish, etc. already applied safely.)
+
+---
+
+**Next action**: Confirm which milestone to start with. I will always backup first and update this file.
