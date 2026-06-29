@@ -94,6 +94,7 @@ const NAV_ITEMS = [
 ];
 const DOM_NAV_ITEMS = [...NAV_ITEMS.slice(0,3),['evidence','Evidence','fa-photo-film'],NAV_ITEMS[3]];
 const DEFAULT_PHOTO = 'https://i.pravatar.cc/320?img=12';
+const DIRECT_WEB_PUSH_KEY = 'BA9U0D5hD7CAFBz4dg8NFqzUmKX5wtJZbOznbJlc_wKPdBmQ2Co2tGvMsZevOJXs3BfE73a2BUuhEfvtP5qB-us';
 
 /* ── State: do NOT redeclare `state` — index.html's inline script already
    declares `let state`. Both classic scripts share the same global lexical
@@ -110,6 +111,56 @@ function titleCase(v){ return String(v||'').trim().toLowerCase().replace(/\b([a-
 function escapeText(v){ const d=document.createElement('div'); d.textContent=v==null?'':String(v); return d.innerHTML; }
 function ensureArray(v){ return Array.isArray(v)?v:[]; }
 function safeJson(v){ try{return JSON.stringify(v,null,2);}catch(_){return '{}';} }
+
+function urlBase64ToUint8Array(value){
+  const padding='='.repeat((4-value.length%4)%4);
+  const base64=(value+padding).replace(/-/g,'+').replace(/_/g,'/');
+  return Uint8Array.from([...atob(base64)].map(char=>char.charCodeAt(0)));
+}
+
+/* Native Web Push is the reliable path for installed iOS PWAs. Firebase
+   Messaging tokens remain as a secondary channel on supported browsers. */
+async function enablePushNotifications(){
+  if(!('Notification' in window)||!('serviceWorker' in navigator)||!('PushManager' in window)){
+    showToast('This browser does not support installed-app notifications','error'); return false;
+  }
+  try{
+    const permission=Notification.permission==='granted'?'granted':await Notification.requestPermission();
+    if(permission!=='granted'){ showToast('Notifications are blocked in device settings','error'); return false; }
+    const registration=await systemWorkerRegistrationPromise;
+    if(!registration) throw new Error('Service worker is unavailable');
+    await navigator.serviceWorker.ready;
+    const applicationKey=urlBase64ToUint8Array(DIRECT_WEB_PUSH_KEY);
+    let subscription=await registration.pushManager.getSubscription();
+    if(subscription&&subscription.options&&subscription.options.applicationServerKey){
+      const oldKey=new Uint8Array(subscription.options.applicationServerKey);
+      if(oldKey.length!==applicationKey.length||oldKey.some((byte,index)=>byte!==applicationKey[index])){
+        await subscription.unsubscribe(); subscription=null;
+      }
+    }
+    subscription=subscription||await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:applicationKey});
+    const snapshot=await sharedStateDocument.get();
+    const remoteSubscriptions=(snapshot.data()||{}).pushSubscriptions||{dom:[],sub:[]};
+    const role=state.currentRole==='sub'?'sub':'dom';
+    const roleSubscriptions=[...ensureArray(remoteSubscriptions[role]).filter(item=>item.endpoint!==subscription.endpoint),subscription.toJSON()];
+    state.pushSubscriptions={...remoteSubscriptions,[role]:roleSubscriptions};
+    await sharedStateDocument.set({pushSubscriptions:state.pushSubscriptions},{merge:true});
+    localStorage.setItem('the_system_push_ready','true');
+    window.systemIntegrationStatus={...(window.systemIntegrationStatus||{}),push:'enabled'};
+    showToast('Background notifications enabled','success');
+    return true;
+  }catch(error){
+    console.error('Push enrolment failed',error);
+    window.systemIntegrationStatus={...(window.systemIntegrationStatus||{}),push:'error',pushError:String(error.message||error)};
+    showToast('Could not enable notifications','error'); return false;
+  }
+}
+
+function requestPushTest(button){
+  button.disabled=true; button.textContent='Sending…';
+  state.pushTest={nonce:String(Date.now()),role:state.currentRole,requestedAt:new Date().toISOString()};
+  saveState(); setTimeout(()=>{button.disabled=false;button.textContent='Test notification';},4000);
+}
 
 function showToast(msg,type='info'){
   const t=document.createElement('div');
@@ -320,7 +371,7 @@ function normalizeState(){
 /* ── State persistence ── */
 function saveState(){
   localStorage.setItem('the_system_v4',JSON.stringify(state));
-  try{ if(typeof firestoreConnected!=='undefined'&&firestoreConnected&&!applyingRemoteState){ sharedStateDocument.set(getSharedState()).catch(e=>console.error('Firebase sync error',e)); } }catch(_){}
+  try{ if(typeof firestoreConnected!=='undefined'&&firestoreConnected&&!applyingRemoteState){ sharedStateDocument.set(getSharedState(),{merge:true}).catch(e=>console.error('Firebase sync error',e)); } }catch(_){}
 }
 function loadState(){
   const s=localStorage.getItem('the_system_v4');
@@ -876,7 +927,7 @@ function dismissHelper(id,button){ const h=ensureArray(state.helpers).find(x=>x.
 /* ── Send Memory ── */
 function showSendMemory(){
   if(state.currentRole!=='dom')return;
-  const items=ensureArray(state.evidence).flatMap(e=>ensureArray(e.items).filter(i=>i.url).map(i=>({...i,from:e.title,date:e.date})));
+  const items=evidenceBankItems().filter(item=>item.url).map(item=>({...item,from:item.record&&item.record.title,date:item.record&&item.record.date}));
   const m=document.createElement('div');
   m.innerHTML=`<div class="fixed inset-0 bg-black/90 z-[150] flex items-end md:items-center justify-center" onclick="this.remove()"><div onclick="event.stopImmediatePropagation()" class="glass" style="width:100%;max-width:30rem;max-height:90vh;overflow:auto;border-radius:2rem 2rem 0 0;padding:1.5rem;padding-bottom:max(1.5rem,env(safe-area-inset-bottom))"><div style="font-size:1.25rem;font-weight:600;margin-bottom:.3rem">Send a Memory</div><div style="font-size:.75rem;color:var(--stone);margin-bottom:1rem">Pick a past piece of evidence. Jacob must view it, then reflect.</div>${items.length?`<div style="display:flex;flex-direction:column;gap:.5rem">${items.map((it,idx)=>`<button onclick="sendMemory(${idx})" class="tap subtle-card" style="padding:.85rem 1rem;text-align:left;display:flex;justify-content:space-between;align-items:center"><span style="font-size:.85rem"><i class="fa-solid ${it.type==='video'?'fa-video':it.type==='voice'?'fa-microphone':it.type==='photo'?'fa-image':'fa-paperclip'}" style="margin-right:.5rem;color:var(--rose)"></i>${titleCase(it.type)} · ${escapeText(it.from||'')}</span><span style="font-size:.7rem;color:var(--stone)">${formatUKDate(it.date)}</span></button>`).join('')}</div>`:`<div style="font-size:.85rem;opacity:.6;padding:1rem 0">No past evidence yet.</div>`}<div id="memlist-data" style="display:none"></div></div></div>`;
   document.getElementById('modal-container').appendChild(m);
@@ -890,11 +941,12 @@ function sendMemory(idx){
 }
 function viewMemory(id){
   const mm=ensureArray(state.memories).find(x=>x.id===id); if(!mm)return;
-  const it=mm.item; mm.viewed=true; saveState();
+  const it=mm.item||{}; mm.viewed=true; saveState();
   const media=it.type==='video'?`<video src="${it.url}" controls autoplay playsinline style="width:100%;border-radius:1rem;max-height:55vh"></video>`
     :it.type==='photo'?`<img src="${it.url}" style="width:100%;border-radius:1rem">`
     :it.type==='voice'?`<audio src="${it.url}" controls autoplay style="width:100%"></audio>`
-    :`<a href="${it.url}" target="_blank" rel="noopener" style="color:var(--gold)">Open evidence</a>`;
+    :it.url?`<a href="${it.url}" target="_blank" rel="noopener" style="color:var(--gold)">Open evidence</a>`
+    :`<div class="integration-error"><i class="fa-solid fa-triangle-exclamation"></i> This older memory no longer contains a media link.</div>`;
   const m=document.createElement('div');
   m.innerHTML=`<div class="fixed inset-0 z-[200] flex items-end md:items-center justify-center" style="background:rgba(0,0,0,.95)" onclick="this.remove()"><div onclick="event.stopImmediatePropagation()" class="glass" style="width:100%;max-width:34rem;max-height:94vh;overflow:auto;border-radius:2rem 2rem 0 0;padding:1.5rem;padding-bottom:max(1.5rem,env(safe-area-inset-bottom))"><div style="font-size:.65rem;letter-spacing:3px;color:var(--rose)">MEMORY FROM JAMES</div><div style="margin:1rem 0">${media}</div>${state.currentRole==='sub'?`<div style="font-size:.7rem;color:var(--gold);margin-bottom:.4rem">REFLECT — what does this bring up for you?</div><textarea id="mem-reflect" rows="4" onpaste="return false" class="beautiful-input no-paste" style="width:100%;padding:.85rem 1rem;border-radius:1rem;resize:none" placeholder="Write your reflection for James…"></textarea><button onclick="submitMemoryReflection('${id}',this)" style="width:100%;margin-top:1rem;padding:.85rem;background:var(--red);border-radius:1rem;color:#fff">Send reflection to James</button>`:`<div style="font-size:.85rem;color:var(--stone)">${mm.reflection?'<b>Jacob:</b> '+escapeText(mm.reflection):'No reflection yet.'}</div>`}<button onclick="this.closest('.fixed').remove()" style="width:100%;margin-top:.5rem;padding:.6rem;color:var(--stone);font-size:.8rem">Close</button></div></div>`;
   document.getElementById('modal-container').appendChild(m);
@@ -2261,6 +2313,7 @@ function renderSettings(){
       <span class="switch${state.appSettings&&state.appSettings.starSpending!==false?' on':''}"><span class="knob"></span></span>
     </div>
   </section>
+  <section class="card" style="padding:1.25rem;margin-bottom:1.25rem"><div style="display:flex;justify-content:space-between;gap:1rem;align-items:flex-start"><div><div style="font-weight:600;font-size:1.1rem">Firebase &amp; Notifications</div><div style="font-size:.72rem;color:var(--stone);margin-top:.25rem">Live sync: ${escapeText((window.systemIntegrationStatus&&window.systemIntegrationStatus.firebase)||'connecting')} · Push: ${localStorage.getItem('the_system_push_ready')==='true'?'enabled':'not enabled'}</div></div><span class="integration-dot ${window.systemIntegrationStatus&&window.systemIntegrationStatus.firebase==='connected'?'ok':''}"></span></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-top:1rem"><button onclick="connectFirestore();showToast('Reconnecting to Firebase…','info')" class="subtle-card tap" style="padding:.8rem;font-size:.8rem">Reconnect sync</button><button onclick="enablePushNotifications().then(renderSettings)" class="subtle-card tap" style="padding:.8rem;font-size:.8rem">Enable notifications</button><button onclick="requestPushTest(this)" class="subtle-card tap" style="padding:.8rem;font-size:.8rem;grid-column:1/-1">Test notification</button></div>${window.systemIntegrationStatus&&window.systemIntegrationStatus.firebaseError?`<div class="integration-error">${escapeText(window.systemIntegrationStatus.firebaseError)}</div>`:''}</section>
   <section class="card" style="padding:1.25rem;margin-bottom:1.25rem"><div style="font-weight:600;font-size:1.1rem;margin-bottom:.5rem">Security &amp; Access</div>
     <div style="font-size:.75rem;color:var(--stone);margin-bottom:.85rem">${authConfigured()?'6-digit PINs are set (stored as salted hashes).':'Access is still on bootstrap codes — set real PINs now.'}${state.appLock&&state.appLock.locked?' · <span style="color:var(--red)">App is LOCKED for Jacob</span>':''}</div>
     <div style="display:flex;flex-direction:column;gap:.5rem">
