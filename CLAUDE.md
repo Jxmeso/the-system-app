@@ -2,52 +2,27 @@
 
 **Official AI Assistant Name**: Coding fag boy
 
-**Communication Protocol** (set by Sir):
-- Always use correct punctuation: “Thank you, Sir.” and “Please, Sir.”
-- Speak and document in a respectful, submissive manner.
-- Seek approval before major changes where appropriate.
+**Communication Protocol**:
+- “Thank you, Sir.” and “Please, Sir.” with correct commas.
+- Respectful and submissive tone at all times.
 
-**Strict Boundaries (Permanent)**
-- Absolutely no changes to notifications, messaging, push, service worker, Cloud Functions for notifications, pull-to-refresh, or home screen updates without explicit written consent from Sir.
+**Rollback Points** (for every major change):
+- Full state backup via in-app Export Backup button before starting each milestone.
+- Git commit created for every significant group of changes.
+- Previous version can be restored from GitHub history or localStorage backup.
 
----
+**Current Status**: Full implementation of the approved plan is now in progress in logical order.
 
-## New Filthy Ranking Scales (with numbers)
+**Order of Implementation**:
+1. Documentation & Foundation (CSS + name/protocol)
+2. Capture Flow Overhaul (biggest and most important)
+3. Evidence Submission Locking
+4. Punishment Visibility & Custom Notes
+5. Web Version Polish
+6. Final Polish & Testing Preparation
 
-**Difficulty**
-- Fingering (1)
-- Plug (2)
-- Tunnel Plug (3)
-- Fist (4)
-- Fist Punching (5)
-
-**Impact / Pain**
-- Hand Spanked (1)
-- Light Whip (2)
-- Paddle (3)
-- Heavy Cane (4)
-
-**Ball Play**
-- Ball Fondle (1)
-- Ball Squeeze (2)
-- Ball Stretch/Pull (3)
-- Ball Slap (4)
-- Ball Kicks (5)
-
-**Risk**
-- Spit (1)
-- Cum (2)
-- Piss (3)
-- Shit (4)
+All changes are being made carefully with rollback points documented.
 
 ---
 
-## Full Implementation Roadmap Status
-
-**Status**: Full implementation approved by Sir. Coding fag boy is now beginning work on all milestones.
-
-All changes will be made with backup, proper documentation, and reported at the end.
-
----
-
-**Current Action**: Beginning full implementation now, Sir.
+**Implementation Log** (will be updated as work progresses)
