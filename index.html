@@ -351,6 +351,17 @@
         let firestoreConnected = false;
         let applyingRemoteState = false;
         let knownTaskStatuses = new Map();
+        let firestoreUnsubscribe = null;
+        let firestoreReconnectTimer = null;
+
+        function setFirebaseStatus(status, error = null) {
+            window.systemIntegrationStatus = {
+                ...(window.systemIntegrationStatus || {}),
+                firebase: status,
+                firebaseError: error ? String(error.message || error) : null,
+                updatedAt: new Date().toISOString()
+            };
+        }
 
         async function checkForAppUpdate() {
             if (updateCheckInProgress) return;
@@ -432,8 +443,9 @@
         function saveState() {
             localStorage.setItem('the_system_v4', JSON.stringify(state));
             if (firestoreConnected && !applyingRemoteState) {
-                sharedStateDocument.set(getSharedState()).catch(error => {
+                sharedStateDocument.set(getSharedState(), { merge: true }).catch(error => {
                     console.error('Could not sync changes to Firebase:', error);
+                    setFirebaseStatus('error', error);
                 });
             }
         }
@@ -444,10 +456,17 @@
         }
 
         function connectFirestore() {
-            sharedStateDocument.onSnapshot(snapshot => {
+            if (firestoreUnsubscribe) firestoreUnsubscribe();
+            clearTimeout(firestoreReconnectTimer);
+            setFirebaseStatus('connecting');
+            firestoreUnsubscribe = sharedStateDocument.onSnapshot(snapshot => {
                 if (!snapshot.exists) {
                     firestoreConnected = true;
-                    sharedStateDocument.set(getSharedState()).catch(console.error);
+                    setFirebaseStatus('connected');
+                    sharedStateDocument.set(getSharedState(), { merge: true }).catch(error => {
+                        console.error('Could not create shared Firebase document:', error);
+                        setFirebaseStatus('error', error);
+                    });
                     knownTaskStatuses = new Map(state.tasks.map(task => [task.id, task.status]));
                     return;
                 }
@@ -458,7 +477,7 @@
                     remoteState.subTitle = 'Jacob';
                     remoteState.stars = 0;
                     remoteState.starLog = [];
-                    sharedStateDocument.set(remoteState).catch(console.error);
+                    sharedStateDocument.set(remoteState, { merge: true }).catch(console.error);
                 }
                 const remoteTasks = remoteState.tasks || [];
                 const newTasks = firestoreConnected
@@ -474,6 +493,7 @@
                 localStorage.setItem('the_system_v4', JSON.stringify(state));
                 applyingRemoteState = false;
                 firestoreConnected = true;
+                setFirebaseStatus(snapshot.metadata && snapshot.metadata.fromCache ? 'cached' : 'connected');
                 knownTaskStatuses = new Map(remoteTasks.map(task => [task.id, task.status]));
 
                 updateRoleUI();
@@ -481,7 +501,10 @@
                 if (newTasks.length && state.currentRole === 'sub') showIncomingTask(newTasks[0]);
                 if (completedTasks.length && state.currentRole === 'dom') showCompletedTask(completedTasks[0]);
             }, error => {
+                firestoreConnected = false;
                 console.error('Firebase connection failed:', error);
+                setFirebaseStatus('error', error);
+                firestoreReconnectTimer = setTimeout(connectFirestore, 5000);
             });
         }
 

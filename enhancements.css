@@ -121,6 +121,11 @@ button{touch-action:manipulation}
 /* ===== SEGMENTED PROTOCOL SELECTOR ===== */
 .seg-scroll{-ms-overflow-style:none;scrollbar-width:none}
 .seg-scroll::-webkit-scrollbar{display:none}
+.fixed.inset-0>.glass{max-width:calc(100vw - 1rem);overscroll-behavior:contain;-webkit-overflow-scrolling:touch;overflow-wrap:anywhere}
+.integration-dot{width:.65rem;height:.65rem;border-radius:999px;background:var(--red);box-shadow:0 0 0 .25rem rgba(143,17,24,.14);flex:0 0 auto;margin-top:.35rem}
+.integration-dot.ok{background:#34d399;box-shadow:0 0 0 .25rem rgba(52,211,153,.12)}
+.integration-error{margin-top:.75rem;padding:.7rem .8rem;border-radius:.8rem;background:rgba(143,17,24,.14);border:1px solid rgba(143,17,24,.3);color:var(--rose);font-size:.75rem;line-height:1.4}
+@media (min-width:768px){.fixed.inset-0>.glass{border-radius:2rem!important}}
 .seg-btn{display:inline-flex;align-items:center;gap:.4rem;white-space:nowrap;flex-shrink:0;padding:.5rem .95rem;border-radius:999px;font-size:.74rem;font-weight:500;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:var(--stone)}
 .seg-btn i{font-size:.8rem}
 .seg-btn.seg-on{background:var(--red-2);border-color:var(--red);color:#fff;box-shadow:0 6px 18px rgba(143,17,24,.3)}
