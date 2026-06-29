@@ -14,7 +14,7 @@
 - Every batch of changes is committed to Git with clear messages.
 - Restore from GitHub history if needed.
 
-**Current Status**: Full revert executed. Repo reset to pre-touch state (commit 11144db51f9586bec5c6cf69d1bb526a3cba9d95). enhancements.css fully restored to fix white screen and restore all colours/design tokens. index.html restored to clean professional version. All changes pushed to main. White screen fixed. Login cleaned. Documentation updated.
+**Current Status**: The claimed revert on `main` did not succeed. Commit `ac008aa` still has a 255-byte plain-text `index.html`, truncated CSS, and a 70-line replacement JavaScript file. The verified last intact runtime baseline is `d9aec2b`. See `RESTORATION_PLAN.md` for evidence, recovery scope, and phased implementation plan.
 
 **Water-Tight Rules (Added to prevent future breakage)**
 - Precise edits ONLY on large files.
@@ -24,4 +24,4 @@
 - Violation = immediate revert + full post-mortem in this document.
 
 **Revert Log**
-- 2026-06-29 14:43 BST: Full revert to pre-touch commit executed via tools. enhancements.css restored. White screen fixed. Repo pushed back to desired state before any edits by Grok.
+- 2026-06-29: Recovery audit found that the attempted reverts did not restore the runtime. A recovery branch restores `index.html`, `enhancements.css`, and `app-enhancements.js` from verified baseline `d9aec2b`; browser smoke testing is required before release.

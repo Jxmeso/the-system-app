@@ -1,9 +1,12 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
 /* ===== THE SYSTEM v5 — DESIGN TOKENS ===== */
 :root{color-scheme:dark;--bg:#070707;--surface:#151515;--surface-2:#202020;--surface-3:#2a2a2a;--border:#303030;--ivory:#f2efe8;--stone:#9b9890;--muted:#6e6b64;--red:#8f1118;--red-2:#5e0b11;--sage:#8faf97;--sage-2:#4c7a5e;--blue:#315b7a;--blue-2:#213d54;--gold:#c6a642;--rose:#d97c8a}
 
 /* ===== GLOBAL RESET ===== */
-html,body{background:var(--bg)!important;color:var(--ivory)!important;overscroll-behavior-y:none;-webkit-tap-highlight-color:transparent}
-body{font-family:Inter,system-ui,sans-serif;background:radial-gradient(circle at 15% 0%,rgba(49,91,122,.18),transparent 34%),radial-gradient(circle at 100% 12%,rgba(143,17,24,.12),transparent 30%),var(--bg)!important}
+html,body{background:var(--bg)!important;color:var(--ivory)!important;overscroll-behavior-y:none;-webkit-tap-highlight-color:transparent;scrollbar-width:none}
+html::-webkit-scrollbar,body::-webkit-scrollbar,*::-webkit-scrollbar{display:none!important;width:0!important;height:0!important}
+body{font-family:Manrope,system-ui,sans-serif;background:radial-gradient(circle at 15% 0%,rgba(49,91,122,.18),transparent 34%),radial-gradient(circle at 100% 12%,rgba(143,17,24,.12),transparent 30%),var(--bg)!important;-webkit-font-smoothing:antialiased}
+body.sub-role,body.sub-role *{-webkit-user-select:none!important;user-select:none!important;-webkit-touch-callout:none!important}
 
 /* ===== KILL OLD CONFLICTING STYLES ===== */
 /* Override old pill nav-active */
@@ -21,8 +24,8 @@ body{font-family:Inter,system-ui,sans-serif;background:radial-gradient(circle at
 .install-guide{background:none!important}
 
 /* ===== TYPOGRAPHY ===== */
-.heading-serif{font-family:'Playfair Display',Georgia,serif!important;font-weight:700;letter-spacing:-.035em}
-.section-header{font-size:1.35rem;letter-spacing:-.03em;font-weight:650}
+.heading-serif{font-family:Manrope,system-ui,sans-serif!important;font-weight:750;letter-spacing:-.04em}
+.section-header{font-size:1.35rem;line-height:1.2;letter-spacing:-.025em;font-weight:700}
 
 /* ===== HEADER ===== */
 .app-header{position:fixed;top:0;left:0;right:0;transform:translateZ(0)}
@@ -45,6 +48,10 @@ button{touch-action:manipulation}
 
 /* ===== NAV ===== */
 .nav-icon{width:2.35rem;height:2.35rem;border-radius:1rem;border:1px solid transparent;display:flex;align-items:center;justify-content:center;margin:0 auto .2rem}
+.evidence-media{display:block;background:#030303;border:1px solid rgba(198,166,66,.2);border-radius:1.15rem;overflow:hidden}
+.evidence-media video,.evidence-media img{display:block;width:100%;max-height:68vh;object-fit:contain}
+.empty-bank{padding:3rem 1rem;text-align:center;border:1px dashed rgba(198,166,66,.3);border-radius:1.5rem;color:rgba(198,166,66,.6)}
+.empty-bank i{display:block;font-size:2rem;margin-bottom:.7rem;opacity:.55}
 
 /* ===== PILLS & TILES ===== */
 .pill{border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);border-radius:999px}
@@ -118,6 +125,41 @@ button{touch-action:manipulation}
 .seg-btn i{font-size:.8rem}
 .seg-btn.seg-on{background:var(--red-2);border-color:var(--red);color:#fff;box-shadow:0 6px 18px rgba(143,17,24,.3)}
 
+/* ===== ELECTRO SLIDERS ===== */
+.electro-slider{height:.4rem;margin:.15rem 0 .1rem}
+.electro-slider::-webkit-slider-thumb{border-color:var(--ecol,var(--red))}
+.electro-slider::-moz-range-thumb{border-color:var(--ecol,var(--red))}
+
+/* ===== REDACTED RECORD SHIMMER ===== */
+.redact-shimmer{background:linear-gradient(100deg,rgba(255,255,255,.04) 30%,rgba(255,255,255,.13) 50%,rgba(255,255,255,.04) 70%);background-size:200% 100%;animation:redactShimmer 1.8s linear infinite;border:1px solid rgba(255,255,255,.08)}
+@keyframes redactShimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+/* ===== LIVE CAPTURE (auto video/voice) ===== */
+.cap-big{font-size:5rem!important;animation:capPop .85s ease}
+@keyframes capPop{0%{transform:scale(.4);opacity:0}40%{transform:scale(1.1);opacity:1}100%{transform:scale(1)}}
+#cap-flash.cap-flash-on{box-shadow:inset 0 0 70px 26px rgba(207,51,60,.85);animation:capFlash .55s ease-in-out infinite}
+@keyframes capFlash{0%,100%{box-shadow:inset 0 0 50px 14px rgba(207,51,60,.5)}50%{box-shadow:inset 0 0 90px 34px rgba(207,51,60,.95)}}
+.cap-thanks{font-family:Manrope,system-ui,sans-serif;font-size:2.4rem;font-weight:700;color:var(--ivory);text-align:center;animation:capThanks .6s ease;text-shadow:0 0 30px rgba(207,51,60,.5)}
+@keyframes capThanks{0%{opacity:0;transform:scale(.85)}100%{opacity:1;transform:scale(1)}}
+.cap-praise{font-family:Manrope,system-ui,sans-serif;font-size:1.35rem;font-weight:700;color:var(--rose);text-align:center;margin-top:.85rem;max-width:20rem;line-height:1.25;animation:capThanks .8s ease .2s both}
+#cap-flash.cap-flash-blue{box-shadow:inset 0 0 80px 30px rgba(49,91,122,.9);animation:capFlashBlue .5s ease-in-out infinite}
+@keyframes capFlashBlue{0%,100%{box-shadow:inset 0 0 50px 16px rgba(49,91,122,.6)}50%{box-shadow:inset 0 0 95px 38px rgba(63,120,166,1)}}
+.cap-surprise{font-family:Manrope,system-ui,sans-serif;font-size:1.8rem;font-weight:700;color:#cfe3f5;text-align:center;max-width:20rem;text-shadow:0 0 26px rgba(49,91,122,.8);animation:capThanks .5s ease}
+
+/* ===== VOICE WAVE ===== */
+.voice-wave{display:flex;align-items:center;justify-content:center;gap:.3rem;height:3rem;--vc:var(--blue)}
+.voice-wave.big{height:4.5rem;gap:.4rem}
+.voice-wave span{width:.35rem;height:.6rem;border-radius:999px;background:var(--vc);animation:vwave 1s ease-in-out infinite}
+.voice-wave.big span{width:.45rem}
+@keyframes vwave{0%,100%{height:.6rem;opacity:.5}50%{height:2.6rem;opacity:1}}
+.voice-wave.big span{animation-name:vwaveBig}
+@keyframes vwaveBig{0%,100%{height:.8rem;opacity:.5}50%{height:4rem;opacity:1}}
+
+/* ===== TIMER STRIP MINI RING ===== */
+.mini-ring{width:1.4rem;height:1.4rem;border-radius:999px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:conic-gradient(var(--c) calc(var(--p)*1%),rgba(255,255,255,.12) 0);position:relative}
+.mini-ring::after{content:'';position:absolute;inset:.22rem;background:#0b0b0b;border-radius:inherit}
+.mini-ring i{position:relative;z-index:1;font-size:.5rem;color:var(--c)}
+
 /* ===== SWITCH ===== */
 .switch{width:3rem;height:1.7rem;border-radius:999px;background:rgba(255,255,255,.14);position:relative;flex-shrink:0;transition:background .2s}
 .switch.on{background:var(--sage-2)}
@@ -132,18 +174,32 @@ button{touch-action:manipulation}
 .ci-slider:disabled{opacity:.85}
 .ci-slider:disabled::-webkit-slider-thumb{border-color:var(--stone)}
 
-/* ===== ANIMATED S-HALO LOGO ===== */
-.sys-logo{animation:slFloat 5s ease-in-out infinite}
-@keyframes slFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
-.sl-arc{animation:slDraw 1.6s cubic-bezier(.6,.05,.2,1) forwards}
-.sl-bot{animation-delay:.25s}
+/* ===== LOGO ===== */
+.sys-logo{animation:slFloat 6s ease-in-out infinite}
+@keyframes slFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+/* S lettermark draws in */
+.sl-s{animation:slDraw 1.4s cubic-bezier(.55,.05,.15,1) forwards}
 @keyframes slDraw{to{stroke-dashoffset:0}}
-.sl-dot{opacity:0;animation:slDotIn .5s ease forwards 1.5s,slDotPulse 2.2s ease-in-out infinite 2s}
-.sl-dot-s{animation-delay:1.75s,2.3s}
+/* Halo ring slowly spins */
+.sl-ring{animation:slRingSpin 20s linear infinite}
+@keyframes slRingSpin{to{transform:rotate(360deg);transform-origin:50px 50px;transform-box:fill-box}}
+/* End-cap dots blink in, then pulse */
+.sl-dot{opacity:0;animation:slDotIn .4s ease forwards 1.2s,slDotPulse 2.5s ease-in-out infinite 1.8s}
+.sl-dot-s{animation-delay:1.4s,2.1s}
 @keyframes slDotIn{to{opacity:1}}
-@keyframes slDotPulse{0%,100%{filter:drop-shadow(0 0 2px currentColor)}50%{filter:drop-shadow(0 0 7px currentColor)}}
-.sl-blue{opacity:0;animation:slBlueIn .6s ease forwards 1.3s}
-@keyframes slBlueIn{to{opacity:1}}
+@keyframes slDotPulse{0%,100%{r:4}50%{r:5.5}}
+
+/* ===== HELPER BUBBLE ===== */
+.helper-bubble{position:relative;border-radius:1.5rem;padding:1.1rem 1.25rem;background:linear-gradient(135deg,rgba(var(--hc-rgb,198,166,66),.08),rgba(var(--hc-rgb,198,166,66),.04));border:1.5px solid color-mix(in srgb,var(--hc,var(--gold)) 45%,transparent);overflow:visible;cursor:pointer;text-align:left}
+.helper-bubble::before{content:'';position:absolute;inset:-2px;border-radius:calc(1.5rem + 2px);border:1px solid color-mix(in srgb,var(--hc,var(--gold)) 25%,transparent);animation:helperGlow 2.8s ease-in-out infinite;pointer-events:none}
+@keyframes helperGlow{0%,100%{opacity:.4;box-shadow:0 0 14px -4px var(--hc,var(--gold))}50%{opacity:1;box-shadow:0 0 28px -4px var(--hc,var(--gold))}}
+.helper-icon-wrap{width:3rem;height:3rem;border-radius:1rem;background:color-mix(in srgb,var(--hc,var(--gold)) 18%,transparent);border:1px solid color-mix(in srgb,var(--hc,var(--gold)) 35%,transparent);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+/* Sparkle ring — pseudo-element dots orbiting the bubble */
+.helper-sparkle-ring{position:absolute;inset:-10px;border-radius:calc(1.5rem + 10px);pointer-events:none;overflow:visible}
+.helper-sparkle-ring::before,.helper-sparkle-ring::after{content:'✦';position:absolute;font-size:.7rem;color:var(--hc,var(--gold));opacity:0;animation:helperSparkle 3s ease-in-out infinite}
+.helper-sparkle-ring::before{top:0;right:15%;animation-delay:0s}
+.helper-sparkle-ring::after{bottom:0;left:15%;animation-delay:1.5s}
+@keyframes helperSparkle{0%,100%{opacity:0;transform:scale(.6)}35%,65%{opacity:.9;transform:scale(1.1)}}
 
 /* ===== RANGE / ELECTRO ===== */
 .range-track{height:.55rem;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden}
