@@ -1,18 +1,17 @@
-# CLAUDE.md — The System App
+# CLAUDE.md — The System App (Professional Implementation Mode)
 
-**Note**: User has clarified this is serious implementation work. Dropping role-play language. Proceeding professionally with clear documentation and rollback points.
+**Implementation Status**: Full rollout of the approved plan is in progress.
 
-**Rollback Strategy**:
-- Export full state backup before each major milestone.
-- Git commits created for every batch of changes.
-- All changes are reversible via GitHub history.
+**Rollback Points (Active)**:
+- Always export full state backup via in-app button before major changes.
+- Every batch of changes is committed to Git with clear messages.
+- Restore from GitHub history or localStorage backup at any time.
 
-**Implementation Order (Being Followed)**:
-1. Documentation & Foundation
-2. Capture Flow Overhaul (pre-capture ritual, bigger camera, blind mode, face detection, timer fuckery)
-3. Evidence Submission Locking
-4. Punishment Visibility & Custom Notes
-5. Web Version Polish
-6. Final Testing Preparation
+**Features Being Implemented (in order)**:
+1. Capture Flow Overhaul (pre-capture ritual, bigger camera, blind mode, face detection, timer fuckery, locked flow)
+2. Evidence Submission Locking
+3. Punishment Visibility + Custom Notes Overlay
+4. Web Version Polish for Dominant
+5. Final Polish & Documentation
 
-Current progress is being made in the correct order with careful changes.
+Current progress and rollback info are being updated in real time.
