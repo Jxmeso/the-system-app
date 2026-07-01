@@ -383,8 +383,8 @@ function loadState(){
 function installNavigation(){
   const nav=document.getElementById('bottom-navigation'); if(!nav)return;
   const items=state&&state.currentRole==='dom'?DOM_NAV_ITEMS:NAV_ITEMS;
-  nav.style.cssText='position:fixed;bottom:0;left:0;right:0;z-index:50;background:rgba(7,7,7,.95);border-top:1px solid rgba(255,255,255,.1);backdrop-filter:blur(22px)';
-  nav.innerHTML=`<div class="max-w-3xl mx-auto grid text-center text-xs" style="grid-template-columns:repeat(${items.length},minmax(0,1fr));padding-bottom:max(1.1rem,env(safe-area-inset-bottom));padding-top:.5rem">${items.map(([tab,label,icon])=>`<button onclick="navigateToTab('${tab}')" class="nav-item tap py-1 flex flex-col items-center gap-0 cursor-pointer" data-tab="${tab}"><span class="nav-icon"><i class="fa-solid ${icon} text-lg"></i></span><span class="text-[10px] tracking-wide">${label}</span></button>`).join('')}</div>`;
+  nav.className='app-nav';
+  nav.innerHTML=`<div class="app-nav-brand"><span class="app-nav-mark">S</span><span><b>The System</b><small>${state.currentRole==='dom'?'Command centre':'Personal space'}</small></span></div><div class="app-nav-inner" role="navigation" aria-label="Primary navigation">${items.map(([tab,label,icon])=>`<button onclick="navigateToTab('${tab}')" class="nav-item tap" data-tab="${tab}" aria-label="Open ${label}" title="${label}"><span class="nav-icon"><i class="fa-solid ${icon}"></i></span><span class="nav-label">${label}</span></button>`).join('')}<button onclick="showFeatureHub()" class="nav-item tap nav-more" aria-label="Open all features" title="All features"><span class="nav-icon"><i class="fa-solid fa-grid-2"></i></span><span class="nav-label">More</span></button></div>`;
 }
 function installScreens(){
   /* Append next to the EXISTING tabs so we inherit the content wrapper's
@@ -601,9 +601,7 @@ function updateHeader(){
   const btns=document.querySelector('.app-header .flex.items-center.gap-x-2:last-child')||document.getElementById('header-action')?.parentElement;
   if(btns){
     const unread=unreadNotifications().length;
-    const menuBtn=isDom
-      ? `<button onclick="showSettings()" title="Settings" style="width:2.5rem;height:2.5rem;display:flex;align-items:center;justify-content:center;border-radius:1rem;background:rgba(255,255,255,.05);color:var(--ivory)" class="tap"><i class="fa-solid fa-bars"></i></button>`
-      : '';
+    const menuBtn=`<button onclick="showFeatureHub()" title="All features" aria-label="Open all features" style="width:2.5rem;height:2.5rem;display:flex;align-items:center;justify-content:center;border-radius:1rem;background:rgba(255,255,255,.05);color:var(--ivory)" class="tap"><i class="fa-solid fa-grid-2"></i></button>`;
     btns.innerHTML=`<button id="hdr-timer" onclick="openHeaderTimer()" class="tap" style="display:none;align-items:center;gap:.4rem;height:2.5rem;padding:0 .7rem;border-radius:999px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1)"></button><button onclick="navigateToTab('notifications')" style="position:relative;width:2.5rem;height:2.5rem;display:flex;align-items:center;justify-content:center;border-radius:1rem;background:rgba(255,255,255,.05);color:var(--gold)" class="tap"><i class="fa-solid fa-bell"></i>${unread?`<span style="position:absolute;top:-.25rem;right:-.25rem;min-width:1.2rem;height:1.2rem;padding:0 .2rem;border-radius:999px;background:var(--red);color:#fff;font-size:.6rem;display:flex;align-items:center;justify-content:center">${unread}</span>`:''}</button>${menuBtn}`;
     updateHeaderTimer();
   }
@@ -661,6 +659,7 @@ function renderCurrentTab(){
   else if(tab==='stars') renderRewards();
   else if(tab==='notifications') renderNotifications();
   else if(tab==='settings') renderSettings();
+  else if(tab==='journal') renderJournal();
   updateHeader(); renderTimerStrip();
 }
 
@@ -2352,6 +2351,68 @@ function resetSection(section){
   saveState(); showToast('Reset Complete','success'); renderSettings();
 }
 function resetEverything(){ const typed=prompt('Type RESET THE SYSTEM to reset everything from scratch.'); if(typed!=='RESET THE SYSTEM')return; backupBeforeReset(); const role=state.currentRole; state=defaultSystemState(role); migrateEnhancedState(); saveState(); showToast('System Reset','success'); navigateToTab('dashboard'); }
+
+/* ════════════ MODERN PRODUCT SURFACE ════════════ */
+function featureDefinition(){
+  const dom=state.currentRole==='dom';
+  return [
+    ['Core',[
+      ['dashboard','Overview','Live status, charts and recent media','fa-grid-2'],
+      ['tasks','Tasks','Assignments, deadlines and submissions','fa-square-check'],
+      ['protocols','Rules & Dynamic','Rules, consequences, boundaries and body','fa-compass-drafting'],
+      ['stars','Rewards','Stars, milestones and rewards','fa-star']]],
+    ['Media & Communication',[
+      ...(dom?[['evidence','Evidence Bank','Photos, video, voice and reports','fa-photo-film']]:[]),
+      ['notifications','Updates','Activity, alerts and responses','fa-bell'],
+      ['journal','Journal','Reflections and private entries','fa-book-open']]],
+    ['People & Tools',[
+      ['profile',dom?'James’s profile':'My profile','Identity, details and records','fa-user'],
+      ...(dom?[['tools','James’s tools','Requests, helpers, memories and check-ins','fa-wand-magic-sparkles'],['settings','Settings','Access, sync, notifications and data','fa-sliders']]:[['request','Requests & suggestions','Ask, suggest and respond','fa-hand']])]]
+  ];
+}
+function openFeature(id){
+  document.getElementById('feature-hub')?.remove();
+  if(id==='journal'){ navigateToTab('journal'); return; }
+  if(id==='profile'){ state.currentRole==='dom'?showDomProfileModal():showProfileModal(); return; }
+  if(id==='tools'){ showDomTools(); return; }
+  if(id==='request'){ state.requestBoxOpen?showMakeRequest():showSuggestPunishment(); return; }
+  navigateToTab(id);
+}
+function showFeatureHub(){
+  document.getElementById('feature-hub')?.remove();
+  const m=document.createElement('div'); m.id='feature-hub';
+  m.innerHTML=`<div class="feature-hub-backdrop" onclick="this.parentElement.remove()"><section class="feature-hub" role="dialog" aria-modal="true" aria-labelledby="feature-hub-title" onclick="event.stopImmediatePropagation()"><header><div><span class="eyebrow">Explore</span><h2 id="feature-hub-title">Everything in one place</h2><p>Choose a feature. Each one includes a plain-language description.</p></div><button onclick="document.getElementById('feature-hub').remove()" class="icon-button" aria-label="Close feature menu"><i class="fa-solid fa-xmark"></i></button></header>${featureDefinition().map(([group,items])=>`<div class="feature-group"><h3>${group}</h3><div class="feature-grid">${items.map(([id,label,desc,icon])=>`<button onclick="openFeature('${id}')" class="feature-card"><span class="feature-icon"><i class="fa-solid ${icon}"></i></span><span><b>${label}</b><small>${desc}</small></span><i class="fa-solid fa-arrow-right feature-arrow"></i></button>`).join('')}</div></div>`).join('')}</section></div>`;
+  document.getElementById('modal-container').appendChild(m);
+}
+function dashboardSeries(){
+  const days=[...Array(7)].map((_,i)=>{const d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()-(6-i));return d;});
+  return days.map(day=>{const next=new Date(day);next.setDate(day.getDate()+1);return {label:day.toLocaleDateString('en-GB',{weekday:'short'}).slice(0,1),value:ensureArray(state.tasks).filter(t=>{const d=new Date(t.completedAt||t.completedDate||0);return d>=day&&d<next;}).length};});
+}
+function dashboardChart(series){const max=Math.max(1,...series.map(x=>x.value));return `<div class="mini-chart" aria-label="Tasks completed over the last seven days">${series.map(x=>`<div class="chart-column"><span class="chart-value">${x.value}</span><i style="height:${Math.max(8,x.value/max*100)}%"></i><small>${x.label}</small></div>`).join('')}</div>`;}
+function modernBroadcast(items){
+  const video=items.find(item=>item.type==='video'&&item.url), photo=items.find(item=>item.type==='photo'&&item.url);
+  if(video)return `<div class="broadcast-stage"><video src="${video.url}" controls playsinline preload="metadata" poster="${photo?photo.url:''}"></video><div class="broadcast-overlay"><span class="status-live"><i></i> Latest video</span><span>${escapeText(titleCase(video.record&&video.record.title||'Evidence broadcast'))}</span></div></div>`;
+  if(photo)return `<div class="broadcast-stage"><img src="${photo.url}" alt="Latest submitted evidence"><div class="broadcast-overlay"><span class="status-ready"><i></i> Latest media</span><span>${escapeText(titleCase(photo.record&&photo.record.title||'Photo evidence'))}</span></div></div>`;
+  return `<div class="broadcast-empty"><i class="fa-solid fa-video"></i><b>Media broadcast ready</b><span>The latest submitted video or photo will appear here.</span></div>`;
+}
+function renderDashboard(){
+  const tab=document.getElementById('tab-dashboard'); if(!tab)return;
+  const isDom=state.currentRole==='dom', tasks=ensureArray(state.tasks), pending=tasks.filter(t=>t.status==='pending'), completed=tasks.filter(t=>t.status==='completed'), media=isDom?evidenceBankItems():[];
+  const completion=tasks.length?Math.round(completed.length/tasks.length*100):0, active=activePunishments(), photos=media.filter(x=>x.type==='photo'&&x.url).slice(0,4);
+  tab.innerHTML=`<section class="command-hero"><div><span class="eyebrow">${greetingForNow()}</span><h1>${escapeText(isDom?state.domTitle:state.subTitle)}</h1><p>${isDom?'Your command centre is synced and ready.':'Your tasks, progress and updates—clearly organised.'}</p></div><button onclick="showFeatureHub()" class="command-button"><i class="fa-solid fa-grid-2"></i><span>Explore features</span></button></section>
+  ${active.length&&!isDom?`<button onclick="activeProtocolPanel='consequences';navigateToTab('protocols')" class="alert-panel"><span><i class="fa-solid fa-hourglass-half"></i></span><b>${escapeText(active[0].title)}</b><small>${getTimeLeft(active[0]).text}</small></button>`:''}
+  <section class="dashboard-layout"><div class="dashboard-main"><div class="section-heading"><div><span class="eyebrow">Media</span><h2>${isDom?'Latest broadcast':'Your progress'}</h2></div>${isDom?`<button onclick="navigateToTab('evidence')">Open library <i class="fa-solid fa-arrow-right"></i></button>`:''}</div>${isDom?modernBroadcast(media):`<div class="progress-hero" style="--progress:${completion}"><strong>${completion}%</strong><span>overall completion</span></div>`}</div>
+  <aside class="dashboard-side"><article class="metric-card metric-feature"><span>Completion</span><strong>${completion}%</strong><div class="progress-track"><i style="width:${completion}%"></i></div><small>${completed.length} of ${tasks.length} tasks</small></article><article class="metric-card"><span>Stars</span><strong>${state.stars||0}</strong><small>earned across the system</small></article><article class="metric-card"><span>Active</span><strong>${active.length}</strong><small>current consequences</small></article></aside></section>
+  <section class="insight-grid"><article class="insight-card"><div class="section-heading compact"><div><span class="eyebrow">7-day activity</span><h2>Completion rhythm</h2></div></div>${dashboardChart(dashboardSeries())}</article><article class="insight-card"><div class="section-heading compact"><div><span class="eyebrow">Next up</span><h2>Priority queue</h2></div><button onclick="navigateToTab('tasks')">All tasks</button></div><div class="focus-list">${pending.slice(0,4).map((t,i)=>`<button onclick="showTaskDetailById(${t.id})"><span>${String(i+1).padStart(2,'0')}</span><b>${escapeText(titleCase(t.title))}</b><small>${getTimeLeft(t).text}</small></button>`).join('')||'<div class="empty-state">Nothing pending.</div>'}</div></article></section>
+  ${isDom&&photos.length?`<section class="photo-strip-section"><div class="section-heading compact"><div><span class="eyebrow">Recent photos</span><h2>Visual record</h2></div><button onclick="activeEvidenceFilter='photo';navigateToTab('evidence')">View gallery</button></div><div class="photo-strip">${photos.map(p=>`<button onclick="activeEvidenceFilter='photo';navigateToTab('evidence')"><img src="${p.url}" alt="${escapeText(p.record&&p.record.title||'Evidence photo')}"><span>${escapeText(titleCase(p.record&&p.record.title||'Photo'))}</span></button>`).join('')}</div></section>`:''}
+  ${isDom?`<section class="quick-actions"><button onclick="showAddTaskModal()"><i class="fa-solid fa-plus"></i><span><b>Assign task</b><small>Create a clear new action</small></span></button><button onclick="showDomTools()"><i class="fa-solid fa-wand-magic-sparkles"></i><span><b>Open tools</b><small>Helpers, memories and requests</small></span></button><button onclick="navigateToTab('notifications')"><i class="fa-solid fa-bell"></i><span><b>Review updates</b><small>${unreadNotifications().length} unread notification${unreadNotifications().length===1?'':'s'}</small></span></button></section>`:''}`;
+  updateCountdowns();
+}
+function renderEvidenceBank(){
+  const tab=document.getElementById('tab-evidence'); if(!tab||state.currentRole!=='dom')return;
+  const all=evidenceBankItems(), filters=[['all','All','fa-layer-group'],['video','Video','fa-video'],['photo','Photos','fa-image'],['text','Reports','fa-align-left'],['voice','Voice','fa-microphone'],['file','Files','fa-paperclip']], visible=activeEvidenceFilter==='all'?all:all.filter(i=>i.type===activeEvidenceFilter);
+  tab.innerHTML=`<section class="library-hero"><div><span class="eyebrow">Private media library</span><h1>Evidence Bank</h1><p>${all.length} items, organised by format and assignment.</p></div><div class="library-stat"><strong>${all.filter(x=>x.type==='photo').length}</strong><span>photos</span></div><div class="library-stat"><strong>${all.filter(x=>x.type==='video').length}</strong><span>videos</span></div></section><div class="filter-bar" role="tablist">${filters.map(([id,label,icon])=>`<button role="tab" aria-selected="${activeEvidenceFilter===id}" onclick="setEvidenceFilter('${id}')" class="${activeEvidenceFilter===id?'active':''}"><i class="fa-solid ${icon}"></i>${label}<span>${id==='all'?all.length:all.filter(x=>x.type===id).length}</span></button>`).join('')}</div><div class="media-library">${visible.map(item=>`<article class="media-card media-${item.type}">${evidenceBankMedia(item)}<div class="media-meta"><span>${escapeText(item.type)}</span><h3>${escapeText(titleCase(item.record&&item.record.title||'Evidence'))}</h3><time>${formatUKDate(item.record&&item.record.date)} · ${formatUKTime(item.record&&item.record.date)}</time></div></article>`).join('')||'<div class="empty-state media-empty"><i class="fa-solid fa-box-open"></i><b>No matching evidence</b><span>New submissions will appear here automatically.</span></div>'}</div>`;
+}
 
 /* ── Role / lock ── */
 function switchRole(){ document.getElementById('main-app').style.display='none'; document.getElementById('login-screen').style.display='flex'; buildKeypad(); }
